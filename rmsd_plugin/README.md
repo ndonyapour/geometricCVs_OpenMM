@@ -1,28 +1,27 @@
 OpenMM RMSDCVForce Plugin
 =====================
-This project is an implementation of the [RMSDCVForce][http://docs.openmm.org/7.5.0/api-c++/generated/OpenMM.RMSDCVForce.html] as a plugin for [OpenMM](https://openmm.org). The plugin utilizes the same code provided in OpenMM, but efforts have been made to optimize it for use as a plugin. The RMSDCVForce calculates the Root-Mean-Square Deviation (RMSDCV) between a set of atom positions and reference positions.
+This project is an implementation of the [RMSDForce](http://docs.openmm.org/7.5.0/api-c++/generated/OpenMM.RMSDForce.html) as a plugin for [OpenMM](https://openmm.org). The plugin utilizes the same code provided in OpenMM, but efforts have been made to optimize it for use as a plugin. The RMSDForce calculates the Root-Mean-Square Deviation (RMSDCV) between a group of atom positions and reference positions.
 
 
 Installing OpenMM
 ===================
 You should use conda to make a new virtual environment:
 
-#+begin_src sh
-  conda create -n omm 
-  conda activate omm
-#+end_src
+    conda create -n omm 
+    conda activate omm
+
 
 Then you manually install the dependencies using
 conda. 
+  
+    conda install -c conda-forge compilers cmake swig
+    conda install -c conda-forge openmm=8.0.0 cudatoolkit 
 
-#+begin_src sh
-conda install -c conda-forge compilers cmake swig
-conda install -c conda-forge openmm=8.0.0 cudatoolkit 
-#+end_src
-Then run the following command to make sure OpenMM runs on the four platforms. If it didn't run on CUDA try to install the version of `cudatoolkit` that matches your GPU.
-#+begin_src sh
-  python -m openmm.testInstallation
-#+end_src
+Then run the following command to make sure OpenMM runs on all the platforms. If it didn't run on CUDA try to 
+install the version of `cudatoolkit` that is compatible with your GPU.
+
+    python -m openmm.testInstallation
+
 
 Building The Plugin
 ===================
@@ -38,12 +37,9 @@ level directory of this project as the source directory.
 3. Press "Configure".
 
 4. Set OPENMM_DIR to point to the directory where OpenMM is installed.  This is needed to locate
-the OpenMM header files and libraries. 
-Note: You can use this method to find the openmm header file folders
-    conda list | grep openmm
-    it will you show something like this  `openmm                    8.0.0           py311hbc0ebcd_0    conda-forge`
-    then search for the openmm build tag in your home directory
-    find . -name "*py311hbc0ebcd_0*"
+the OpenMM header files and libraries.  Note: You can use this method to find the openmm header file folder. 
+First, run `conda list | grep openmm` command which will you show something like this  `openmm     8.0.0    py311hbc0ebcd_0    conda-forge`
+then search for the openmm build tag in your home directory using `find . -name "*py311hbc0ebcd_0*"`.
   
 5. Set CMAKE_INSTALL_PREFIX to the directory where the plugin should be installed.  Usually,
 this will be the same as OPENMM_DIR, so the plugin will be added to your OpenMM installation.
