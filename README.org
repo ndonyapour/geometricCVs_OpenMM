@@ -1,0 +1,4 @@
+* Geometric method CVs in OpenMM
+The objective of this project is to implement the [[https://pubs.acs.org/doi/10.1021/acs.jpclett.2c01490][Geometric approach]] Collective Variables (CVs) 
+using [[https://github.com/openmm/openmm][OpenMM]] force plugin. The Geometric approach is a Potential of Mean Force (PMF) method that estimates the binding free energy by decomposing it into distinct contributions. 
+It defines translational, rotational, and conformational CVs and calculates the free energy contribution of each CV to the protein-ligand interactions separately.
