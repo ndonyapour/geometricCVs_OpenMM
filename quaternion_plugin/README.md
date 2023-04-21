@@ -1,7 +1,6 @@
-OpenMM RMSDCVForce Plugin
+OpenMM QuaternionForce Plugin
 =====================
-This project is an implementation of the [RMSDForce](http://docs.openmm.org/7.5.0/api-c++/generated/OpenMM.RMSDForce.html) as a plugin for [OpenMM](https://openmm.org). The plugin utilizes the same code provided in OpenMM, but efforts have been made to optimize it for use as a plugin. The RMSDForce calculates the Root-Mean-Square Deviation (RMSD) between a group of atom positions and reference positions.
-
+This project implements Quaternion as a plugin for [OpenMM](https://openmm.org).
 
 Installing OpenMM
 ===================
@@ -45,21 +44,21 @@ then search for the openmm build tag in your home directory using `find . -name 
 this will be the same as OPENMM_DIR, so the plugin will be added to your OpenMM installation.
 
 6. If you plan to build the OpenCL platform, make sure that OPENCL_INCLUDE_DIR and
-OPENCL_LIBRARY are set correctly, and that RMSDCV_BUILD_OPENCL_LIB is selected.
+OPENCL_LIBRARY are set correctly, and that Quaternion_BUILD_OPENCL_LIB is selected.
 
 7. If you plan to build the CUDA platform, make sure that CUDA_TOOLKIT_ROOT_DIR is set correctly
-and that RMSDCV_BUILD_CUDA_LIB is selected.
+and that Quaternion_BUILD_CUDA_LIB is selected.
 
 8. Press "Configure" again if necessary, then press "Generate".
 
-9. Use the build system you selected to build and install the plugin.  For RMSDCV, if you
+9. Use the build system you selected to build and install the plugin.  For Quaternion, if you
 selected Unix Makefiles, type `make install`.
 
 
 Test Cases
 ==========
 
-To run all the test cases build the "test" target, for RMSDCV by typing `make test`.
+To run all the test cases build the "test" target, for Quaternion by typing `make test`.
 
 This project contains several different directories for test cases: one for each platform, and
 another for serialization related code.  Each of these directories contains a CMakeLists.txt file
@@ -76,7 +75,7 @@ kernels are registered automatically, but that doesn't happen for code that stat
 against it.  Therefore, the very first line of each `main()` function typically invokes a method
 to do the registration that _would_ have been done if the plugin were loaded automatically:
 
-    registerRMSDCVOpenCLKernelFactories();
+    registerQuaternionOpenCLKernelFactories();
 
 The OpenCL and CUDA test directories create three tests from each source file: the program is
 invoked three times while passing the strings "single", "mixed", and "double" as a command line
@@ -94,7 +93,7 @@ OpenCL and CUDA Kernels
 =======================
 
 The OpenCL and CUDA versions of the force are implemented with the common compute framework.
-This allows us to write a single class (`CommonCalcRMSDCVForceKernel`) that provides an
+This allows us to write a single class (`CommonCalcQuaternionForceKernel`) that provides an
 implementation for both platforms at the same time.  Device code is written in a subset of
 the OpenCL and CUDA languages, with a few macro and function definitions to make them
 identical.
@@ -110,11 +109,11 @@ doesn't have a clean syntax for multi-line strings.
 This project (like OpenMM itself) uses a hybrid mechanism that provides the best of both
 approaches.  The source code for the kernels is found in the `platforms/common/src/kernels`
 directory.  At build time, a CMake script loads every .cc file contained in the directory
-and generates a class with all the file contents as strings.  For the RMSDCV plugin, the
-directory contains a single file called RMSDCVForce.cc.  You can
+and generates a class with all the file contents as strings.  For the Quaternion plugin, the
+directory contains a single file called QuaternionForce.cc.  You can
 put anything you want into this file, and then C++ code can access the content of that file
-as `CommonRMSDCVKernelSources::RMSDCVForce`.  If you add more .cc files to this directory,
-correspondingly named variables will automatically be added to `CommonRMSDCVKernelSources`.
+as `CommonQuaternionKernelSources::QuaternionForce`.  If you add more .cc files to this directory,
+correspondingly named variables will automatically be added to `CommonQuaternionKernelSources`.
 
 
 Python API
@@ -130,16 +129,16 @@ the potential bugs that would come from having duplicate definitions.  It takes 
 processing to do that, though, and for a single plugin it's far simpler to just write the
 interface file by hand.  You will find it in the "python" directory.
 
-To build and install the Python API, build the "PythonInstall" target, for RMSDCV by typing
+To build and install the Python API, build the "PythonInstall" target, for Quaternion by typing
 "make PythonInstall".  (If you are installing into the system Python, you may need to use sudo.)
 This runs SWIG to generate the C++ and Python files for the extension module
-(RMSDCVPluginWrapper.cpp and RMSDCVplugin.py), then runs a setup.py script to build and
+(QuaternionPluginWrapper.cpp and Quaternionplugin.py), then runs a setup.py script to build and
 install the module.  Once you do that, you can use the plugin from your Python scripts:
 
     from openmm import System
-    from RMSDCVplugin import RMSDCVForce
+    from Quaternionplugin import QuaternionForce
     system = System()
-    force = RMSDCVForce()
+    force = QuaternionForce()
     system.addForce(force)
 
 
