@@ -39,9 +39,6 @@
 namespace RMSDCVPlugin {
 
 class ReferenceCalcRMSDCVForceKernel : public CalcRMSDCVForceKernel {
-private:
-    std::vector<OpenMM::Vec3> referencePos;
-    std::vector<int> particles;
 
 public:
     /**
@@ -85,6 +82,9 @@ public:
      * @return the energy of the interaction
      */
    double calculateIxn(std::vector<OpenMM::Vec3>& atomCoordinates, std::vector<OpenMM::Vec3>& forces) const;
+private:
+    std::vector<OpenMM::Vec3> referencePos;
+    std::vector<int> particles;
 };
 
 } // namespace RMSDCVPlugin

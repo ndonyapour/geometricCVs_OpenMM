@@ -43,17 +43,39 @@ using namespace RMSDCVPlugin;
 using namespace OpenMM;
 using namespace std;
 
+static vector<RealVec>& extractPositions(ContextImpl& context) {
+    ReferencePlatform::PlatformData* data = reinterpret_cast<ReferencePlatform::PlatformData*>(context.getPlatformData());
+    return *((vector<RealVec>*) data->positions);
+}
 
-// ReferenceCalcRMSDCVForceKernel::ReferenceCalcRMSDCVForceKernel(vector<OpenMM::Vec3>& referencePos, vector<int>& particles) :
-//         referencePos(referencePos), particles(particles) {
-// }
+static vector<RealVec>& extractForces(ContextImpl& context) {
+    ReferencePlatform::PlatformData* data = reinterpret_cast<ReferencePlatform::PlatformData*>(context.getPlatformData());
+    return *((vector<RealVec>*) data->forces);
+}
 
 ReferenceCalcRMSDCVForceKernel::~ReferenceCalcRMSDCVForceKernel() {
 }
 
+void ReferenceCalcRMSDCVForceKernel::initialize(const System& system, const RMSDCVForce& force) {
+   
+    particles = force.getParticles();
+    if (particles.size() == 0)
+        for (int i = 0; i < system.getNumParticles(); i++)
+            particles.push_back(i);
+    referencePos = force.getReferencePositions();
+    Vec3 center;
+    for (int i : particles)
+        center += referencePos[i];
+    center /= particles.size();
+    for (Vec3& p : referencePos)
+        p -= center; 
+}
 double ReferenceCalcRMSDCVForceKernel::calculateIxn(vector<OpenMM::Vec3>& atomCoordinates, vector<OpenMM::Vec3>& forces) const {
     // Compute the RMSDCV and its gradient using the algorithm described in Coutsias et al,
     // "Using quaternions to calculate RMSDCV" (doi: 10.1002/jcc.20110).  First subtract
+    // the centroid from the atom positions.  The reference positions have already been centered.
+     // Compute the RMSD and its gradient using the algorithm described in Coutsias et al,
+    // "Using quaternions to calculate RMSD" (doi: 10.1002/jcc.20110).  First subtract
     // the centroid from the atom positions.  The reference positions have already been centered.
     
     int numParticles = particles.size();
@@ -61,7 +83,7 @@ double ReferenceCalcRMSDCVForceKernel::calculateIxn(vector<OpenMM::Vec3>& atomCo
     for (int i : particles)
         center += atomCoordinates[i];
     center /= numParticles;
-    vector<OpenMM::Vec3> positions(numParticles);
+    vector<Vec3> positions(numParticles);
     for (int i = 0; i < numParticles; i++)
         positions[i] = atomCoordinates[particles[i]]-center;
     
@@ -106,7 +128,7 @@ double ReferenceCalcRMSDCVForceKernel::calculateIxn(vector<OpenMM::Vec3>& atomCo
     Array2D<double> vectors;
     eigen.getV(vectors);
 
-    // Compute the RMSDCV.
+    // Compute the RMSD.
     
     double sum = 0.0;
     for (int i = 0; i < numParticles; i++) {
@@ -119,7 +141,7 @@ double ReferenceCalcRMSDCVForceKernel::calculateIxn(vector<OpenMM::Vec3>& atomCo
         // Numerical error can lead to NaNs, so just return 0 now.
         return 0.0;
     }
-    double RMSDCV = sqrt(msd);
+    double rmsd = sqrt(msd);
 
     // Compute the rotation matrix.
 
@@ -139,38 +161,32 @@ double ReferenceCalcRMSDCVForceKernel::calculateIxn(vector<OpenMM::Vec3>& atomCo
         Vec3 rotatedRef(U[0][0]*p[0] + U[1][0]*p[1] + U[2][0]*p[2],
                         U[0][1]*p[0] + U[1][1]*p[1] + U[2][1]*p[2],
                         U[0][2]*p[0] + U[1][2]*p[1] + U[2][2]*p[2]);
-        forces[particles[i]] -= (positions[i]-rotatedRef) / (RMSDCV*numParticles);
+        forces[particles[i]] -= (positions[i]-rotatedRef) / (rmsd*numParticles);
     }
-    return RMSDCV;
+    return rmsd;
 }
 
-void ReferenceCalcRMSDCVForceKernel::initialize(const System& system, const RMSDCVForce& force) {
-    // Initialize bond parameters.
-    
-    // int numBonds = force.getNumBonds();
-    // particle1.resize(numBonds);
-    // particle2.resize(numBonds);
-    // length.resize(numBonds);
-    // k.resize(numBonds);
-   
-}
+
 
 double ReferenceCalcRMSDCVForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
     // vector<RealVec>& pos = extractPositions(context);
-    // vector<RealVec>& force = extractForces(context);
-    // int numBonds = particle1.size();
-    double energy = 0;
-
-    return energy;
+    vector<Vec3>& posData = extractPositions(context);
+    vector<Vec3>& forceData = extractForces(context);
+    return calculateIxn(posData, forceData);
 }
 
 void ReferenceCalcRMSDCVForceKernel::copyParametersToContext(ContextImpl& context, const RMSDCVForce& force) {
-    // if (force.getNumBonds() != particle1.size())
-    //     throw OpenMMException("updateParametersInContext: The number of RMSDCV bonds has changed");
-    // for (int i = 0; i < force.getNumBonds(); i++) {
-    //     int p1, p2;
-    //     force.getBondParameters(i, p1, p2, length[i], k[i]);
-    //     if (p1 != particle1[i] || p2 != particle2[i])
-    //         throw OpenMMException("updateParametersInContext: A particle index has changed");
-    // }
+    if (referencePos.size() != force.getReferencePositions().size())
+        throw OpenMMException("updateParametersInContext: The number of reference positions has changed");
+    particles = force.getParticles();
+    if (particles.size() == 0)
+        for (int i = 0; i < referencePos.size(); i++)
+            particles.push_back(i);
+    referencePos = force.getReferencePositions();
+    Vec3 center;
+    for (int i : particles)
+        center += referencePos[i];
+    center /= particles.size();
+    for (Vec3& p : referencePos)
+        p -= center;
 }
