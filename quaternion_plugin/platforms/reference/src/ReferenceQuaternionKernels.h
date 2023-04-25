@@ -39,11 +39,7 @@
 namespace QuaternionPlugin {
 
 class ReferenceCalcQuaternionForceKernel : public CalcQuaternionForceKernel {
-private:
-    std::vector<OpenMM::Vec3> referencePos;
-    std::vector<int> particles;
-
-public:
+  public:
     /**
      * Constructor
      */
@@ -85,6 +81,11 @@ public:
      * @return the energy of the interaction
      */
    double calculateIxn(std::vector<OpenMM::Vec3>& atomCoordinates, std::vector<OpenMM::Vec3>& forces) const;
+   
+  private:
+    std::vector<OpenMM::Vec3> referencePos;
+    std::vector<int> particles;
+    int qidx;
 };
 
 } // namespace QuaternionPlugin

@@ -58,28 +58,6 @@ import simtk.unit as unit
         
 %}
 
-// %typemap(in) std::vector<int> {
-//     PyObject *obj = $input;
-//     if (!PyList_Check(obj)) {
-//         PyErr_SetString(PyExc_TypeError, "expected a list");
-//         return NULL;
-//     }
-//     Py_ssize_t n = PyList_Size(obj);
-//     std::vector<int> vec(n);
-//     for (Py_ssize_t i = 0; i < n; i++) {
-//         PyObject *item = PyList_GetItem(obj, i);
-//         if (!PyLong_Check(item)) {
-//             PyErr_SetString(PyExc_TypeError, "expected a list of ints");
-//             return NULL;
-//         }
-//         vec[i] = PyLong_AsLong(item);
-//     }
-//     $1 = vec;
-// }
-
-/*
- * Convert C++ exceptions to Python exceptions.
-*/
 %exception {
     try {
         $action
@@ -94,7 +72,7 @@ namespace QuaternionPlugin {
 class QuaternionForce : public OpenMM::Force {
 public:
 
-    QuaternionForce(const std::vector<Vec3> &referencePositions, const std::vector<int> &particles=std::vector<int>());
+    QuaternionForce(const std::vector<Vec3> &referencePositions, const std::vector<int> &particles=std::vector<int>(), const int& qidx=0);
     virtual bool usesPeriodicBoundaryConditions() const;
     void setParticles(const std::vector<int> &particles);    
     void setReferencePositions(const std::vector<Vec3> &positions);
@@ -102,6 +80,7 @@ public:
     void updateParametersInContext(OpenMM::Context& context);
     %clear Context & context;
     const std::vector<int>& getParticles() const;
+    const int getQidx() const;
     const std::vector<Vec3>& getReferencePositions() const;
 
 

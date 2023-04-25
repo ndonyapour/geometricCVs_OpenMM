@@ -38,6 +38,7 @@
 #include <set>
 
 using namespace std;
+
 namespace QuaternionPlugin {
 class CommonQuaternionForceInfo : public ComputeForceInfo {
 public:
@@ -108,9 +109,9 @@ private:
     bool hasInitializedKernel;
     OpenMM::ComputeContext& cc;
     const OpenMM::System& system;
-    int blockSize;
+    int blockSize, qidx;
     double sumNormRef;
-    OpenMM::ComputeArray referencePos, particles, buffer;
+    OpenMM::ComputeArray referencePos, particles, buffer, eigval, eigvec, poscenter;
     OpenMM::ComputeKernel kernel1, kernel2;
     CommonQuaternionForceInfo* info;
 

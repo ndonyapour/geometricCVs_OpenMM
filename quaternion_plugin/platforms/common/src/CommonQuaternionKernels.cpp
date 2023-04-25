@@ -44,6 +44,7 @@ using namespace std;
 
 
 void CommonCalcQuaternionForceKernel::initialize(const System& system, const QuaternionForce& force) {
+    qidx = force.getQidx();
     // Create data structures.
     
     ContextSelector selector(cc);
@@ -54,7 +55,10 @@ void CommonCalcQuaternionForceKernel::initialize(const System& system, const Qua
         numParticles = system.getNumParticles();
     referencePos.initialize(cc, system.getNumParticles(), 4*elementSize, "referencePos");
     particles.initialize<int>(cc, numParticles, "particles");
-    buffer.initialize(cc, 13, elementSize, "buffer");
+    buffer.initialize(cc, 9, elementSize, "buffer");
+    eigval.initialize(cc, 4, elementSize, "eigval");
+    eigvec.initialize(cc, 4, 4*elementSize, "eigvec");
+    poscenter.initialize(cc, 3, elementSize, "poscenter");
     recordParameters(force);
     info = new CommonQuaternionForceInfo(force);
     cc.addForce(info);
@@ -73,11 +77,14 @@ void CommonCalcQuaternionForceKernel::initialize(const System& system, const Qua
     kernel1->addArg(particles);
     kernel1->addArg(buffer);
     kernel2->addArg();
+    kernel2->addArg();
     kernel2->addArg(cc.getPaddedNumAtoms());
     kernel2->addArg(cc.getPosq());
     kernel2->addArg(referencePos);
     kernel2->addArg(particles);
-    kernel2->addArg(buffer);
+    kernel2->addArg(poscenter);
+    kernel2->addArg(eigval);
+    kernel2->addArg(eigvec);
     kernel2->addArg(cc.getLongForceBuffer());
 }
 
@@ -128,75 +135,73 @@ double CommonCalcQuaternionForceKernel::executeImpl(OpenMM::ContextImpl& context
     kernel1->setArg(0, numParticles);
     kernel1->execute(blockSize, blockSize);
     
-    // Download the results, build the F matrix, and find the maximum eigenvalue
+    // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
     // and eigenvector.
-
-    vector<REAL> b;
-    buffer.download(b);
+    
+    vector<REAL> C;
+    buffer.download(C);
 
     // JAMA::Eigenvalue may run into an infinite loop if we have any NaN
     for (int i = 0; i < 9; i++) {
-        if (b[i] != b[i])
+        if (C[i] != C[i])
             throw OpenMMException("NaN encountered during Quaternion force calculation");
     }
     
-    Array2D<double> F(4, 4);
-    F[0][0] =  b[0*3+0] + b[1*3+1] + b[2*3+2];
-    F[1][0] =  b[1*3+2] - b[2*3+1];
-    F[2][0] =  b[2*3+0] - b[0*3+2];
-    F[3][0] =  b[0*3+1] - b[1*3+0];
-    F[0][1] =  b[1*3+2] - b[2*3+1];
-    F[1][1] =  b[0*3+0] - b[1*3+1] - b[2*3+2];
-    F[2][1] =  b[0*3+1] + b[1*3+0];
-    F[3][1] =  b[0*3+2] + b[2*3+0];
-    F[0][2] =  b[2*3+0] - b[0*3+2];
-    F[1][2] =  b[0*3+1] + b[1*3+0];
-    F[2][2] = -b[0*3+0] + b[1*3+1] - b[2*3+2];
-    F[3][2] =  b[1*3+2] + b[2*3+1];
-    F[0][3] =  b[0*3+1] - b[1*3+0];
-    F[1][3] =  b[0*3+2] + b[2*3+0];
-    F[2][3] =  b[1*3+2] + b[2*3+1];
-    F[3][3] = -b[0*3+0] - b[1*3+1] + b[2*3+2];
-    JAMA::Eigenvalue<double> eigen(F);
-    Array1D<double> values;
-    eigen.getRealEigenvalues(values);
-    Array2D<double> vectors;
-    eigen.getV(vectors);
+    Array2D<double> S(4, 4);
+    S[0][0] =  C[0*3+0] + C[1*3+1] + C[2*3+2];
+    S[1][0] =  C[1*3+2] - C[2*3+1];
+    S[2][0] =  C[2*3+0] - C[0*3+2];
+    S[3][0] =  C[0*3+1] - C[1*3+0];
+    S[0][1] =  C[1*3+2] - C[2*3+1];
+    S[1][1] =  C[0*3+0] - C[1*3+1] - C[2*3+2];
+    S[2][1] =  C[0*3+1] + C[1*3+0];
+    S[3][1] =  C[0*3+2] + C[2*3+0];
+    S[0][2] =  C[2*3+0] - C[0*3+2];
+    S[1][2] =  C[0*3+1] + C[1*3+0];
+    S[2][2] = -C[0*3+0] + C[1*3+1] - C[2*3+2];
+    S[3][2] =  C[1*3+2] + C[2*3+1];
+    S[0][3] =  C[0*3+1] - C[1*3+0];
+    S[1][3] =  C[0*3+2] + C[2*3+0];
+    S[2][3] =  C[1*3+2] + C[2*3+1];
+    S[3][3] = -C[0*3+0] - C[1*3+1] + C[2*3+2];
 
     // Compute the Quaternion.
-
-    double msd = (sumNormRef+b[9]-2*values[3])/numParticles;
-    if (msd < 1e-20) {
-        // The particles are perfectly aligned, so all the forces should be zero.
-        // Numerical error can lead to NaNs, so just return 0 now.
-        return 0.0;
+    Array2D<double> S_eigvec;
+    Array1D<double> S_eigval;
+    JAMA::Eigenvalue<double> eigen(S);
+    eigen.getRealEigenvalues(S_eigval);
+    eigen.getV(S_eigvec);
+    double dot;
+    std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0}; 
+    //Normalise each eigenvector in the direction closer to norm
+    for (int i=0;i<4;i++) {
+        dot=0.0;
+        for (int j=0;j<4;j++) {
+            dot += normquat[j] * S_eigvec[i][j];
+        }
+        if (dot < 0.0)
+            for (int j=0;j<4;j++)
+                S_eigvec[i][j] = - S_eigvec[i][j];
     }
-    double Quaternion = sqrt(msd);
-    b[9] = Quaternion;
 
-    // Compute the rotation matrix.
-
-    double q[] = {vectors[0][3], vectors[1][3], vectors[2][3], vectors[3][3]};
-    double q00 = q[0]*q[0], q01 = q[0]*q[1], q02 = q[0]*q[2], q03 = q[0]*q[3];
-    double q11 = q[1]*q[1], q12 = q[1]*q[2], q13 = q[1]*q[3];
-    double q22 = q[2]*q[2], q23 = q[2]*q[3];
-    double q33 = q[3]*q[3];
-    b[0] = q00+q11-q22-q33;
-    b[1] = 2*(q12-q03);
-    b[2] = 2*(q13+q02);
-    b[3] = 2*(q12+q03);
-    b[4] = q00-q11+q22-q33;
-    b[5] = 2*(q23-q01);
-    b[6] = 2*(q13-q02);
-    b[7] = 2*(q23+q01);
-    b[8] = q00-q11-q22+q33;
-
-    // Upload it to the device and invoke the kernel to apply forces.
     
-    buffer.upload(b);
+    vector<REAL> center = {static_cast<REAL>(C[10]), static_cast<REAL>(C[11]), static_cast<REAL>(C[11])}; 
+    vector<REAL> eigval_buffer = {static_cast<REAL>(S_eigval[0]), static_cast<REAL>(S_eigval[1]), 
+                                  static_cast<REAL>(S_eigval[2]), static_cast<REAL>(S_eigval[3])}; 
+    vector<mm_double4> eigvec_buffer;
+    
+    for (int i=0;i<4;i++) 
+        eigvec_buffer.push_back(mm_double4(S_eigvec[i][0], S_eigvec[i][1], S_eigvec[i][2], S_eigvec[i][3]));
+    
+    poscenter.upload(center);
+    // if true, automatic conversions between single and double
+    //                  precision will be performed as necessary
+    eigval.upload(eigval_buffer);
+    eigvec.upload(eigvec_buffer, true);
     kernel2->setArg(0, numParticles);
+    kernel2->setArg(1, qidx);
     kernel2->execute(numParticles);
-    return Quaternion;
+    return S_eigvec[0][qidx];
 }
 
 void CommonCalcQuaternionForceKernel::copyParametersToContext(OpenMM::ContextImpl& context, const QuaternionForce& force) {

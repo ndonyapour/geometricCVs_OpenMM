@@ -38,8 +38,8 @@ using namespace QuaternionPlugin;
 using namespace OpenMM;
 using namespace std;
 
-QuaternionForce::QuaternionForce(const vector<Vec3>& referencePositions, const vector<int>& particles) :
-        referencePositions(referencePositions), particles(particles) {
+QuaternionForce::QuaternionForce(const vector<Vec3>& referencePositions, const vector<int>& particles, const int& qidx) :
+        referencePositions(referencePositions), particles(particles), qidx(qidx){
 }
 
 void QuaternionForce::setReferencePositions(const std::vector<Vec3>& positions) {

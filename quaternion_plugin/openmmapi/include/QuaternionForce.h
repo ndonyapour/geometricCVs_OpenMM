@@ -68,12 +68,19 @@ public:
      *                            particles in the system will be used.
      */
     explicit QuaternionForce(const std::vector<Vec3>& referencePositions,
-                       const std::vector<int>& particles=std::vector<int>());
+                       const std::vector<int>& particles=std::vector<int>(), const int& qidx=0);
     /**
      * Get the reference positions to compute the deviation from.
      */
     const std::vector<Vec3>& getReferencePositions() const {
         return referencePositions;
+    }
+     /**
+     * Get the index of the quaternion to use when computing the Quaternion.  If this
+     * is empty, the first index (0) will be used.
+     */
+    const int getQidx() const {
+        return qidx;
     }
     /**
      * Set the reference positions to compute the deviation from.
@@ -113,6 +120,7 @@ protected:
 private:
     std::vector<Vec3> referencePositions;
     std::vector<int> particles;
+    int qidx;
 };
 
 } // namespace QuaternionPlugin

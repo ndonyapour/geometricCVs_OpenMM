@@ -84,17 +84,11 @@ std::vector<Vec3> shiftbyCOG(const std::vector<Vec3> pos)
 
 void ReferenceCalcQuaternionForceKernel::initialize(const System& system, const QuaternionForce& force) {
     particles = force.getParticles();
+    qidx = force.getQidx();
     if (particles.size() == 0)
         for (int i = 0; i < system.getNumParticles(); i++)
             particles.push_back(i);
     referencePos = force.getReferencePositions();
-    Vec3 center;
-    for (int i : particles)
-        center += referencePos[i];
-    center /= particles.size();
-    for (Vec3& p : referencePos)
-        p -= center; 
-   
 }
 
 double ReferenceCalcQuaternionForceKernel::calculateIxn(vector<OpenMM::Vec3>& atomCoordinates, vector<OpenMM::Vec3>& forces) const {
@@ -118,13 +112,12 @@ double ReferenceCalcQuaternionForceKernel::calculateIxn(vector<OpenMM::Vec3>& at
     qrot.request_group2_gradients(pos.size());
     qrot.calc_optimal_rotation(centered_refpos, centered_pos, normquat);
     
-    // claculate forces 
-    int qidx = 0;
+    // calculate forces 
     int numParticles = particles.size();
     for (int i = 0; i < numParticles; i++) 
         forces[particles[i]] += qrot.dQ0_2[i][qidx] * 1/numParticles; 
         
-    return qrot.q0;
+    return qrot.q[qidx];
 }
 
 
