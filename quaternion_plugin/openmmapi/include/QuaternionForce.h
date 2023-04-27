@@ -98,6 +98,12 @@ public:
      * is empty, all particles in the system will be used.
      */
     void setParticles(const std::vector<int>& particles);
+    
+    /**
+     * Set the index of Q to use when computing the Quaternion.  If this
+     * is empty, all particles in the system will be used.
+     */
+    void setQidx(const int& qidx);
     /**
      * Update the reference positions and particle indices in a Context to match those stored
      * in this Force object.  This method provides an efficient method to update certain parameters

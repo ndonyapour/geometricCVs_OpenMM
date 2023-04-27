@@ -129,9 +129,9 @@ KERNEL void computeQuaternionForces(int numParticles, int qidx, int paddedNumAto
         for (int p=0; p<4; p++) {
             for (int i=0 ;i<4; i++) {
                 for (int j=0; j<4; j++) {
-                    dq0_2[p] += (Q1[i] * ds_2[i][j] * Q0[j]) / (L0-L1) * Q1[p] 
-                             +  (Q2[i] * ds_2[i][j] * Q0[j]) / (L0-L2) * Q2[p] 
-                             +  (Q3[i] * ds_2[i][j] * Q0[j]) / (L0-L3) * Q3[p];
+                    dq0_2[p] += -1 * ((Q1[i] * ds_2[i][j] * Q0[j]) / (L0-L1) * Q1[p] 
+                                    + (Q2[i] * ds_2[i][j] * Q0[j]) / (L0-L2) * Q2[p] 
+                                    + (Q3[i] * ds_2[i][j] * Q0[j]) / (L0-L3) * Q3[p]);
                 }
             }
         }

@@ -76,6 +76,7 @@ public:
     virtual bool usesPeriodicBoundaryConditions() const;
     void setParticles(const std::vector<int> &particles);    
     void setReferencePositions(const std::vector<Vec3> &positions);
+    void setQidx(const int& qidx);
     %apply OpenMM::Context & OUTPUT {OpenMM::Context & context };    
     void updateParametersInContext(OpenMM::Context& context);
     %clear Context & context;

@@ -146,24 +146,24 @@ double CommonCalcQuaternionForceKernel::executeImpl(OpenMM::ContextImpl& context
         if (C[i] != C[i])
             throw OpenMMException("NaN encountered during Quaternion force calculation");
     }
-    
+
     Array2D<double> S(4, 4);
-    S[0][0] =  C[0*3+0] + C[1*3+1] + C[2*3+2];
-    S[1][0] =  C[1*3+2] - C[2*3+1];
-    S[2][0] =  C[2*3+0] - C[0*3+2];
-    S[3][0] =  C[0*3+1] - C[1*3+0];
-    S[0][1] =  C[1*3+2] - C[2*3+1];
-    S[1][1] =  C[0*3+0] - C[1*3+1] - C[2*3+2];
-    S[2][1] =  C[0*3+1] + C[1*3+0];
-    S[3][1] =  C[0*3+2] + C[2*3+0];
-    S[0][2] =  C[2*3+0] - C[0*3+2];
-    S[1][2] =  C[0*3+1] + C[1*3+0];
-    S[2][2] = -C[0*3+0] + C[1*3+1] - C[2*3+2];
-    S[3][2] =  C[1*3+2] + C[2*3+1];
-    S[0][3] =  C[0*3+1] - C[1*3+0];
-    S[1][3] =  C[0*3+2] + C[2*3+0];
-    S[2][3] =  C[1*3+2] + C[2*3+1];
-    S[3][3] = -C[0*3+0] - C[1*3+1] + C[2*3+2];
+    S[0][0] = -C[0*3+0] - C[1*3+1] - C[2*3+2];
+    S[1][0] = -C[1*3+2] + C[2*3+1];
+    S[2][0] = -C[2*3+0] + C[0*3+2];
+    S[3][0] = -C[0*3+1] + C[1*3+0];
+    S[0][1] = -C[1*3+2] + C[2*3+1];
+    S[1][1] = -C[0*3+0] + C[1*3+1] + C[2*3+2];
+    S[2][1] = -C[0*3+1] - C[1*3+0];
+    S[3][1] = -C[0*3+2] - C[2*3+0];
+    S[0][2] = -C[2*3+0] + C[0*3+2];
+    S[1][2] = -C[0*3+1] - C[1*3+0];
+    S[2][2] =  C[0*3+0] - C[1*3+1] + C[2*3+2];
+    S[3][2] = -C[1*3+2] - C[2*3+1];
+    S[0][3] = -C[0*3+1] + C[1*3+0];
+    S[1][3] = -C[0*3+2] - C[2*3+0];
+    S[2][3] = -C[1*3+2] - C[2*3+1];
+    S[3][3] =  C[0*3+0] + C[1*3+1] - C[2*3+2];
 
     // Compute the Quaternion.
     Array2D<double> S_eigvec;
@@ -183,8 +183,7 @@ double CommonCalcQuaternionForceKernel::executeImpl(OpenMM::ContextImpl& context
             for (int j=0;j<4;j++)
                 S_eigvec[i][j] = - S_eigvec[i][j];
     }
-
-    
+    //std::cout<<qidx<<"\t"<<S_eigvec[0][qidx]<<"\n";
     vector<REAL> center = {static_cast<REAL>(C[10]), static_cast<REAL>(C[11]), static_cast<REAL>(C[11])}; 
     vector<REAL> eigval_buffer = {static_cast<REAL>(S_eigval[0]), static_cast<REAL>(S_eigval[1]), 
                                   static_cast<REAL>(S_eigval[2]), static_cast<REAL>(S_eigval[3])}; 

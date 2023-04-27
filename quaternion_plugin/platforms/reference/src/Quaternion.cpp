@@ -28,24 +28,22 @@ void Quaternion::build_correlation_matrix(const std::vector<Vec3> pos1, const st
 void Quaternion::calculate_overlap_matrix(void){
 
     S = Array2D<double>(4, 4);
-
-    S[0][0] = C[0][0] + C[1][1] + C[2][2];
-    S[1][1] = C[0][0] - C[1][1] - C[2][2];
-    S[2][2] = - C[0][0] + C[1][1] - C[2][2];
-    S[3][3] = - C[0][0] - C[1][1] + C[2][2];
-    S[0][1] = C[1][2] - C[2][1];
-    S[0][2] = - C[0][2] + C[2][0];
-    S[0][3] = C[0][1] - C[1][0];
-    S[1][2] = C[0][1] + C[1][0];
-    S[1][3] = C[0][2] + C[2][0];
-    S[2][3] = C[1][2] + C[2][1];
+    S[0][0] =  - C[0][0] - C[1][1]- C[2][2];
+    S[1][1] = - C[0][0] + C[1][1] + C[2][2];
+    S[2][2] =  C[0][0] - C[1][1] + C[2][2];
+    S[3][3] =  C[0][0] + C[1][1] - C[2][2];
+    S[0][1] = - C[1][2] + C[2][1];
+    S[0][2] = C[0][2] - C[2][0];
+    S[0][3] = - C[0][1] + C[1][0];
+    S[1][2] = - C[0][1] - C[1][0];
+    S[1][3] = - C[0][2] - C[2][0];
+    S[2][3] = - C[1][2] - C[2][1];
     S[1][0] = S[0][1];
     S[2][0] = S[0][2];
     S[2][1] = S[1][2];
     S[3][0] = S[0][3];
     S[3][1] = S[1][3];
     S[3][2] = S[2][3];
-
 }
 void  Quaternion::diagonalize_matrix(const std::vector<double> normquat)
 {
@@ -145,9 +143,9 @@ void Quaternion::calc_optimal_rotation(const std::vector<OpenMM::Vec3> pos1, con
         for (unsigned p=0; p<4; p++) {
             for (unsigned i=0 ;i<4; i++) {
                 for (unsigned j=0; j<4; j++) {
-                    dq0_1[p] += (Q1[i] * ds_1[i][j] * Q0[j]) / (L0-L1) * Q1[p]
-                             + (Q2[i] * ds_1[i][j] * Q0[j]) / (L0-L2) * Q2[p]
-                             + (Q3[i] * ds_1[i][j] * Q0[j]) / (L0-L3) * Q3[p];
+                    dq0_1[p] += -1 * ((Q1[i] * ds_1[i][j] * Q0[j]) / (L0-L1) * Q1[p]
+                                    + (Q2[i] * ds_1[i][j] * Q0[j]) / (L0-L2) * Q2[p]
+                                    + (Q3[i] * ds_1[i][j] * Q0[j]) / (L0-L3) * Q3[p]);
                     }
                 }
             }
@@ -192,14 +190,14 @@ void Quaternion::calc_optimal_rotation(const std::vector<OpenMM::Vec3> pos1, con
         for (unsigned p=0; p<4; p++) {
             for (unsigned i=0 ;i<4; i++) {
                 for (unsigned j=0; j<4; j++) {
-                    dq0_2[p] += (Q1[i] * ds_2[i][j] * Q0[j]) / (L0-L1) * Q1[p]
-                             + (Q2[i] * ds_2[i][j] * Q0[j]) / (L0-L2) * Q2[p]
-                             + (Q3[i] * ds_2[i][j] * Q0[j]) / (L0-L3) * Q3[p];
+                    dq0_2[p] += -1 * ((Q1[i] * ds_2[i][j] * Q0[j]) / (L0-L1) * Q1[p]
+                                    + (Q2[i] * ds_2[i][j] * Q0[j]) / (L0-L2) * Q2[p]
+                                    + (Q3[i] * ds_2[i][j] * Q0[j]) / (L0-L3) * Q3[p]);
                 }
             }
         }
     } // Second loop
-    } // if 
+    }
 
     }
 

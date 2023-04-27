@@ -44,6 +44,7 @@ void QuaternionForceProxy::serialize(const void* object, SerializationNode& node
     node.setIntProperty("version", 0);
     const QuaternionForce& force = *reinterpret_cast<const QuaternionForce*>(object);
     node.setIntProperty("forceGroup", force.getForceGroup());
+    node.setIntProperty("Qidx", force.getQidx());
     SerializationNode& positionsNode = node.createChildNode("ReferencePositions");
     for (const Vec3& pos : force.getReferencePositions())
        positionsNode.createChildNode("Position").setDoubleProperty("x", pos[0]).setDoubleProperty("y", pos[1]).setDoubleProperty("z", pos[2]);
@@ -64,7 +65,9 @@ void* QuaternionForceProxy::deserialize(const SerializationNode& node) const {
         vector<int> particles;
         for (auto& particle : node.getChildNode("Particles").getChildren())
             particles.push_back(particle.getIntProperty("index"));
-        force = new QuaternionForce(positions, particles);
+        int qidx;
+        qidx = node.getIntProperty("Qidx");
+        force = new QuaternionForce(positions, particles, qidx);
         force->setForceGroup(node.getIntProperty("forceGroup", 0));
         return force;
     }

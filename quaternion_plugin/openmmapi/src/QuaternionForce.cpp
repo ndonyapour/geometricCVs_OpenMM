@@ -50,6 +50,9 @@ void QuaternionForce::setParticles(const std::vector<int>& particles) {
     this->particles = particles;
 }
 
+void QuaternionForce::setQidx(const int& qidx) {
+    this->qidx = qidx;
+}
 void QuaternionForce::updateParametersInContext(Context& context) {
     dynamic_cast<QuaternionForceImpl&>(getImplInContext(context)).updateParametersInContext(getContextImpl(context));
 }
