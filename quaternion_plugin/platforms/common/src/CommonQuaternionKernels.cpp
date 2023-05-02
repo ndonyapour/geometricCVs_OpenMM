@@ -165,15 +165,24 @@ double CommonCalcQuaternionForceKernel::executeImpl(OpenMM::ContextImpl& context
     S[2][3] = -C[1*3+2] - C[2*3+1];
     S[3][3] =  C[0*3+0] + C[1*3+1] - C[2*3+2];
 
-    // Compute the Quaternion.
+    JAMA::Eigenvalue<double> eigen(S);
     Array2D<double> S_eigvec;
     Array1D<double> S_eigval;
-    JAMA::Eigenvalue<double> eigen(S);
     eigen.getRealEigenvalues(S_eigval);
     eigen.getV(S_eigvec);
     double dot;
     std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0}; 
-    //Normalise each eigenvector in the direction closer to norm
+    
+    // transpose 
+    Array2D<double> temp = Array2D<double>(4, 4); 
+    for (int i=0;i<4;i++) {
+        for (int j=0;j<4;j++) 
+                temp[j][i] = S_eigvec[i][j];
+    }
+    
+    S_eigvec = temp;
+    
+   // Normalise each eigenvector in the direction closer to norm
     for (int i=0;i<4;i++) {
         dot=0.0;
         for (int j=0;j<4;j++) {
@@ -181,8 +190,20 @@ double CommonCalcQuaternionForceKernel::executeImpl(OpenMM::ContextImpl& context
         }
         if (dot < 0.0)
             for (int j=0;j<4;j++)
-                S_eigvec[i][j] = - S_eigvec[i][j];
+                S_eigvec[i][j] = -S_eigvec[i][j];
     }
+    
+    // invert eigen vectrs 
+    // invert (q0, -q1, -q, -q3)
+    for (int i=0;i<4;i++) {
+        for (int j=1;j<4;j++) 
+            S_eigvec[i][j] = -S_eigvec[i][j];
+    }
+    // std::cout << "****************\n";
+    // for (int i=0;i<4;i++) {
+    //         std::cout<<S_eigval[i] << "\t \t" <<S_eigvec[i][0] << "\t" << S_eigvec[i][1]<<"\t" << S_eigvec[i][2] << "\t" <<S_eigvec[i][3] << "\n";
+    //     }
+    
     //std::cout<<qidx<<"\t"<<S_eigvec[0][qidx]<<"\n";
     vector<REAL> center = {static_cast<REAL>(C[10]), static_cast<REAL>(C[11]), static_cast<REAL>(C[11])}; 
     vector<REAL> eigval_buffer = {static_cast<REAL>(S_eigval[0]), static_cast<REAL>(S_eigval[1]), 
