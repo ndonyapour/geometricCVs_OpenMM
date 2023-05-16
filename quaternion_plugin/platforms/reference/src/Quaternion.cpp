@@ -50,17 +50,34 @@ void  Quaternion::diagonalize_matrix(const std::vector<double> normquat)
     JAMA::Eigenvalue<double> eigen(S);
     eigen.getRealEigenvalues(S_eigval);
     eigen.getV(S_eigvec);
-    double dot;
-    //Normalise each eigenvector in the direction closer to norm
-    for (unsigned i=0;i<4;i++) {
+    
+    
+    Array2D<double> temp = Array2D<double>(4, 4); 
+    for (int i=0;i<4;i++) {
+        for (int j=0;j<4;j++) 
+                temp[j][i] = S_eigvec[i][j];
+    }
+    
+    S_eigvec = temp;
+    
+   // Normalise each eigenvector in the direction closer to norm
+   double dot;
+    for (int i=0;i<4;i++) {
         dot=0.0;
-        for (unsigned j=0;j<4;j++) {
+        for (int j=0;j<4;j++) {
             dot += normquat[j] * S_eigvec[i][j];
         }
         if (dot < 0.0)
-            for (unsigned j=0;j<4;j++)
+            for (int j=0;j<4;j++)
                 S_eigvec[i][j] = -S_eigvec[i][j];
     }
+    
+    // inverse eigen vectrs 
+    // inverse for quaternion inv(q) = (q0, -q1, -q, -q3)
+    // for (int i=0;i<4;i++) {
+    //     for (int j=1;j<4;j++) 
+    //         S_eigvec[i][j] = -S_eigvec[i][j];
+    // }
 
 }
 

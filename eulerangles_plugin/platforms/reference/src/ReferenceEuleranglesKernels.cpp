@@ -36,10 +36,10 @@
 #include "openmm/reference/RealVec.h"
 #include "openmm/reference/ReferencePlatform.h"
 #include "openmm/Vec3.h"
-
 #include "jama_eig.h"
 #include "Quaternion.h"
 
+#include <cmath>
 using namespace EuleranglesPlugin;
 using namespace OpenMM;
 using namespace std;
@@ -52,6 +52,10 @@ static vector<RealVec>& extractPositions(ContextImpl& context) {
 static vector<RealVec>& extractForces(ContextImpl& context) {
     ReferencePlatform::PlatformData* data = reinterpret_cast<ReferencePlatform::PlatformData*>(context.getPlatformData());
     return *((vector<RealVec>*) data->forces);
+}
+
+double asinDerivative(double x) {
+    return 1 / sqrt(1 - x * x);
 }
 
 ReferenceCalcEuleranglesForceKernel::~ReferenceCalcEuleranglesForceKernel() {
@@ -100,6 +104,8 @@ double ReferenceCalcEuleranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
     // Compute the Quaternion and its gradient using the algorithm described in Coutsias et al,
     // "Using Quaternion to calculate Quaternion" (doi: 10.1002/jcc.20110).  First subtract
     // the centroid from the atom positions.  The reference positions have already been centered.
+    std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0}; 
+    Quaternion qrot, fit_qrot;;
     if (!enable_fitting) {
         std::vector<Vec3> refpos, pos, centered_refpos, centered_pos;
         for (int i : particles ){
@@ -112,50 +118,77 @@ double ReferenceCalcEuleranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
         centered_pos = shiftbyCOG(pos);
 
         // calculating q 
-        Quaternion qrot;
-        std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0}; 
         qrot.request_group2_gradients(pos.size());
-        qrot.calc_optimal_rotation(centered_refpos, centered_pos, normquat);
-
-        // calculate forces 
-        int numParticles = particles.size();
-        for (int i = 0; i < numParticles; i++) 
-            forces[particles[i]] += qrot.dQ0_2[i][qidx] * 1/numParticles; 
+        qrot.calc_optimal_rotation(centered_refpos, centered_pos, normquat); 
     }
     else {
         
-        std::vector<Vec3> refpos, pos, centered_refpos, centered_pos;
+        std::vector<Vec3> refpos, pos, fit_refpos, fit_pos, centered_refpos, centered_pos, fit_centered_refpos, fit_centered_pos; 
         for (int i : particles ){
             refpos.push_back(referencePos[i]);
             pos.push_back(atomCoordinates[i]);
         } 
-        std::vector<Vector>  translate_fit, translate_pos;
-        qrotation rotfit, rot;
-        Vector fit_cog = calculateCOG(currpos1);
-
-        translate_fit = translateCoordinates(currpos1, fit_cog);
-
-        //Vector pos_cog = calculateCOG(currpos2);
-        translate_pos = translateCoordinates(currpos2, fit_cog);
+        
+        for (int i : fitting_particles){
+            fit_refpos.push_back(referencePos[i]);
+            fit_pos.push_back(atomCoordinates[i]);
+        }
+        // center reference pos
+        centered_refpos = shiftbyCOG(refpos);
+        fit_centered_refpos = shiftbyCOG(fit_refpos);
+       
+        // center current posittions 
+        Vec3 fit_cog = calculateCOG(fit_pos);
+        centered_pos = translateCoordinates(pos, fit_cog);
+        fit_centered_refpos = translateCoordinates(fit_pos, fit_cog);
 
         // You need to request gradients first
-        rotfit.request_group1_gradients(currpos1.size());
-        rotfit.calc_optimal_rotation(translate_fit, refpos1, normquat);
+        fit_qrot.request_group1_gradients(fit_pos.size());
+        fit_qrot.calc_optimal_rotation(fit_centered_pos, fit_centered_refpos, normquat);
 
         // apply fitting rotation
-        std::vector<Vector> rot_fit, rot_pos;
-        rot_fit = rotfit.rotateCoordinates(rotfit.q, translate_fit);
-        rot_pos = rotfit.rotateCoordinates(rotfit.q, translate_pos);
+        std::vector<Vec3> fit_rot_pos, rot_pos;
+        fit_rot_pos = fit_qrot.rotateCoordinates(fit_qrot.q, fit_centered_pos);
+        rot_pos = fit_qrot.rotateCoordinates(fit_qrot.q, centered_pos);
 
         // main rotation
-        rot.request_group2_gradients(currpos2.size());
-        rot.calc_optimal_rotation(refpos2, rot_pos, normquat);
+        qrot.request_group2_gradients(pos.size());
+        qrot.calc_optimal_rotation(centered_refpos, rot_pos, normquat);
         
     }
-     
+    double energy, radian_to_degree = 180 / 3.1415926;
+    vector<double> deriv_const(4);
+    if (angle == "Euler") {
+        double q1 = qrot.q[0], q2 = qrot.q[1], q3 = qrot.q[2], q4 = qrot.q[3];
+        double x = 2 * (q1 * q3 - q4 * q2);
+        energy = radian_to_degree * asin(x);
+        double deriv = 2 * radian_to_degree * asinDerivative(x);
+        deriv_const[0] = deriv * q3; 
+        deriv_const[1] = -deriv * q4;
+        deriv_const[2] = deriv * q1;
+        deriv_const[3] = -deriv * q2;
+    }
     
+    if (!enable_fitting){
+       // not alignment done 
+        int numParticles = particles.size();
+        for (int i = 0; i < numParticles; i++) 
+            for (int qidx = 0; qidx < 4; qidx++ )
+                forces[particles[i]] += qrot.dQ0_2[i][qidx] * deriv_const[qidx]/numParticles;
+    }
+    else{
+        int numParticles = particles.size();
+        for (int i = 0; i < numParticles; i++) {
+            for (int qidx = 0; qidx < 4; qidx++ ) {
+                Vec3 deriv = qrot.quaternionRotate(qrot.quaternionInvert(fit_qrot.q), qrot.dQ0_2[i][qidx]);
+                forces[particles[i]] += deriv * deriv_const[qidx]/numParticles;   
+                
+            } 
+        }
+      
+    }
         
-    return qrot.q[qidx];
+    return energy;
 }
 
 

@@ -193,8 +193,8 @@ double CommonCalcQuaternionForceKernel::executeImpl(OpenMM::ContextImpl& context
                 S_eigvec[i][j] = -S_eigvec[i][j];
     }
     
-    // invert eigen vectrs 
-    // invert (q0, -q1, -q, -q3)
+    // inverse eigen vectrs 
+    // inverse for quaternion inv(q) = (q0, -q1, -q, -q3)
     for (int i=0;i<4;i++) {
         for (int j=1;j<4;j++) 
             S_eigvec[i][j] = -S_eigvec[i][j];

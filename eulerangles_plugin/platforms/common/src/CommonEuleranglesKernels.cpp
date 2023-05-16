@@ -44,7 +44,7 @@ using namespace std;
 
 
 void CommonCalcEuleranglesForceKernel::initialize(const System& system, const EuleranglesForce& force) {
-    qidx = force.getQidx();
+    qidx = 0; 
     // Create data structures.
     
     ContextSelector selector(cc);
