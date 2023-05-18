@@ -86,6 +86,21 @@ std::vector<Vec3> shiftbyCOG(const std::vector<Vec3> pos)
    return translateCoordinates(pos, t);
 }
 
+void calculateDeriv(std::vector<double> q, std::string angle, std::vector<double>& deriv_const, double& energy){
+    double radian_to_degree = 180 / 3.1415926;
+    if (angle == "Euler") {
+        double q1 = q[0], q2 = q[1], q3 = q[2], q4 = q[3];
+        double x = 2 * (q1 * q3 - q4 * q2);
+        energy = radian_to_degree * asin(x);
+        double deriv = 2 * radian_to_degree * asinDerivative(x);
+        deriv_const[0] = deriv * q3; 
+        deriv_const[1] = -deriv * q4;
+        deriv_const[2] = deriv * q1;
+        deriv_const[3] = -deriv * q2;
+    } 
+    
+}
+
 void ReferenceCalcEuleranglesForceKernel::initialize(const System& system, const EuleranglesForce& force) {
     particles = force.getParticles();
     fitting_particles = force.getFittingParticles();
@@ -156,18 +171,10 @@ double ReferenceCalcEuleranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
         qrot.calc_optimal_rotation(centered_refpos, rot_pos, normquat);
         
     }
-    double energy, radian_to_degree = 180 / 3.1415926;
+    // calcualte derivatives 
+    double energy;
     vector<double> deriv_const(4);
-    if (angle == "Euler") {
-        double q1 = qrot.q[0], q2 = qrot.q[1], q3 = qrot.q[2], q4 = qrot.q[3];
-        double x = 2 * (q1 * q3 - q4 * q2);
-        energy = radian_to_degree * asin(x);
-        double deriv = 2 * radian_to_degree * asinDerivative(x);
-        deriv_const[0] = deriv * q3; 
-        deriv_const[1] = -deriv * q4;
-        deriv_const[2] = deriv * q1;
-        deriv_const[3] = -deriv * q2;
-    }
+    calculateDeriv(qrot.q, angle, deriv_const, energy);
     
     if (!enable_fitting){
        // not alignment done 

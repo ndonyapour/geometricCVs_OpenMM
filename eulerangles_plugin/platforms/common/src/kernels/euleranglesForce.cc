@@ -32,26 +32,40 @@ DEVICE real reduceValue(real value, LOCAL_ARG volatile real* temp) {
 /**
  * Perform the first step of computing the Eulerangles.  This is executed as a single work group.
  */
-KERNEL void computeEuleranglesPart1(int numParticles, GLOBAL const real4* RESTRICT posq, GLOBAL const real4* RESTRICT referencePos,
-        GLOBAL const int* RESTRICT particles, GLOBAL real* buffer) {
+KERNEL void computeEuleranglesPart1(int numParticles, bool center, bool rotate, GLOBAL const real4* RESTRICT posq, GLOBAL const real4* RESTRICT referencePos,
+        GLOBAL const int* RESTRICT particles, GLOBAL real* poscenter, GLOBAL real* qrot, GLOBAL real* buffer) {
     LOCAL volatile real temp[THREAD_BLOCK_SIZE];
 
     // Compute the center of the particle positions.
     
-    real3 center = make_real3(0);
-    for (int i = LOCAL_ID; i < numParticles; i += LOCAL_SIZE)
-        center += trimTo3(posq[particles[i]]);
-    center.x = reduceValue(center.x, temp)/numParticles;
-    center.y = reduceValue(center.y, temp)/numParticles;
-    center.z = reduceValue(center.z, temp)/numParticles;
-    
+    real3 pcenter; 
+    if (center) {
+        pcenter = make_real3(0);
+        for (int i = LOCAL_ID; i < numParticles; i += LOCAL_SIZE)
+            pcenter += trimTo3(posq[particles[i]]);
+        pcenter.x = reduceValue(pcenter.x, temp)/numParticles;
+        pcenter.y = reduceValue(pcenter.y, temp)/numParticles;
+        pcenter.z = reduceValue(pcenter.z, temp)/numParticles;
+    }
+    else
+        pcenter = make_real3(poscenter[0], poscenter[1], poscenter[2]);
     // Compute the correlation matrix.
     
     real R[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
     real sum = 0;
+    real q0 = qrot[0];
+    real3 vq = make_real3(qrot[1], qrot[2], qrot[3]);
     for (int i = LOCAL_ID; i < numParticles; i += LOCAL_SIZE) {
         int index = particles[i];
-        real3 pos = trimTo3(posq[index]) - center;
+        real3 pos = trimTo3(posq[index]) - pcenter;
+        if (rotate) {
+            real3 a, b;
+            a = cross(vq, pos) + q0 * pos;
+            b = cross(vq, a);
+            pos = b + b + pos;         
+        }
+            // do q rotate 
+            
         real3 refPos = trimTo3(referencePos[index]);
         R[0][0] += pos.x*refPos.x;
         R[0][1] += pos.x*refPos.y;
@@ -76,18 +90,20 @@ KERNEL void computeEuleranglesPart1(int numParticles, GLOBAL const real4* RESTRI
             for (int j = 0; j < 3; j++)
                 buffer[3*i+j] = R[i][j];
         buffer[9] = sum;
-        buffer[10] = center.x;
-        buffer[11] = center.y;
-        buffer[12] = center.z;
+        buffer[10] = pcenter.x;
+        buffer[11] = pcenter.y;
+        buffer[12] = pcenter.z;
     }
 }
+
 
 /**
  * Apply forces based on the Eulerangles.
  */
-KERNEL void computeEuleranglesForces(int numParticles, int qidx, int paddedNumAtoms, GLOBAL const real4* RESTRICT posq, GLOBAL const real4* RESTRICT referencePos,
-        GLOBAL const int* RESTRICT particles, GLOBAL real* poscenter, GLOBAL real* eigval, const real4* RESTRICT eigvec, GLOBAL mm_long* RESTRICT forceBuffers) {
-    real3 center = make_real3(poscenter[0], poscenter[1], poscenter[2]);
+KERNEL void computeEuleranglesForces(int numParticles, bool rotate, int paddedNumAtoms, GLOBAL const real4* RESTRICT posq, GLOBAL const real4* RESTRICT referencePos,
+        GLOBAL const int* RESTRICT particles, GLOBAL real* eigval, GLOBAL const real4* RESTRICT eigvec, 
+        const GLOBAL real* RESTRICT anglederiv, const GLOBAL real* RESTRICT qrot, GLOBAL mm_long* RESTRICT forceBuffers) {
+    //real3 center = make_real3(poscenter[0], poscenter[1], poscenter[2]);
     real scale = 1 / (real) (numParticles);
     real3 ds_2[4][4];
     real L0 = eigval[0], L1 = eigval[1], L2 = eigval[2], L3 = eigval[3];
@@ -122,25 +138,27 @@ KERNEL void computeEuleranglesForces(int numParticles, int qidx, int paddedNumAt
         // if (qidx == 0)
         //     printf("%d dq= %4.2f %4.2f %4.2f \n", index, refPos.x, refPos.y, refPos.z);  
         
-        real3 dl0_2;
+     ///   real3 dl0_2;
         real3 dq0_2;
-        dl0_2 = make_real3(0, 0, 0);
+        //dl0_2 = make_real3(0, 0, 0);
         dq0_2 = make_real3(0, 0, 0);
-        for (unsigned i = 0; i < 4; i++) {
-            for (unsigned j = 0; j < 4; j++) {
-                dl0_2 += -1 * (Q0[i] * ds_2[i][j] * Q0[j]);
-            }
-        } 
+        // for (unsigned i = 0; i < 4; i++) {
+        //     for (unsigned j = 0; j < 4; j++) {
+        //         dl0_2 += -1 * (Q0[i] * ds_2[i][j] * Q0[j]);
+        //     }
+        // } 
        
-        for (int i=0 ;i<4; i++) {
-            for (int j=0; j<4; j++) {
-                dq0_2 += -1 * ((Q1[i] * ds_2[i][j] * Q0[j]) / (L0-L1) * Q1[qidx] 
-                                + (Q2[i] * ds_2[i][j] * Q0[j]) / (L0-L2) * Q2[qidx] 
-                                + (Q3[i] * ds_2[i][j] * Q0[j]) / (L0-L3) * Q3[qidx]);
+        for (int p=0; p<4; p++){
+            for (int i=0 ;i<4; i++) {
+                for (int j=0; j<4; j++) {
+                    dq0_2 += -1 * anglederiv[p]* ((Q1[i] * ds_2[i][j] * Q0[j]) / (L0-L1) * Q1[p] 
+                                    + (Q2[i] * ds_2[i][j] * Q0[j]) / (L0-L2) * Q2[p] 
+                                    + (Q3[i] * ds_2[i][j] * Q0[j]) / (L0-L3) * Q3[p]);
 
+                }
             }
         }
-                 
+                         
         real3 force = dq0_2 * scale; 
         // if (qidx == 0 && index==0)
         //     printf("%d dq= %4.10f %4.10f %4.10f \n", index, force.x, force.y, force.z); 

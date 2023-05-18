@@ -111,9 +111,12 @@ private:
     const OpenMM::System& system;
     int blockSize, qidx;
     double sumNormRef;
-    OpenMM::ComputeArray referencePos, particles, buffer, eigval, eigvec, poscenter;
-    OpenMM::ComputeKernel kernel1, kernel2;
+    OpenMM::ComputeArray referencePos, particles, buffer, fit_referencePos, fit_particles, fit_buffer, fit_poscenter; 
+    OpenMM::ComputeArray eigval, eigvec, poscenter, qrot, anglederiv;
+    OpenMM::ComputeKernel kernel1, kernel2, kernel3;
     CommonEuleranglesForceInfo* info;
+    std::string angle;
+    bool enable_fitting=false;
 
 };
 
