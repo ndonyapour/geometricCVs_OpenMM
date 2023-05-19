@@ -132,14 +132,24 @@ void CommonCalcEuleranglesForceKernel::initialize(const System& system, const Eu
     angle = force.get_Angle();
     if (numParticles == 0)
         numParticles = system.getNumParticles();
+        
+    int fit_numParticles = force.getFittingParticles().size();
+    if (fit_numParticles != 0) {
+        enable_fitting = true;
+        fit_referencePos.initialize(cc, system.getNumParticles(), 4*elementSize, "referencePos");
+        fit_particles.initialize<int>(cc, fit_numParticles, "particles");
+        fit_buffer.initialize(cc, 13, elementSize, "buffer");
+    }
+        
     referencePos.initialize(cc, system.getNumParticles(), 4*elementSize, "referencePos");
     particles.initialize<int>(cc, numParticles, "particles");
-    buffer.initialize(cc, 9, elementSize, "buffer");
+    buffer.initialize(cc, 13, elementSize, "buffer");
     eigval.initialize(cc, 4, elementSize, "eigval");
     eigvec.initialize(cc, 4, 4*elementSize, "eigvec");
     poscenter.initialize(cc, 3, elementSize, "poscenter");
     qrot.initialize(cc, 4, elementSize, "qrot");
     anglederiv.initialize(cc, 4, elementSize, "anglederiv");
+    
     
     recordParameters(force);
     info = new CommonEuleranglesForceInfo(force);
@@ -163,6 +173,7 @@ void CommonCalcEuleranglesForceKernel::initialize(const System& system, const Eu
     kernel1->addArg(qrot);
     kernel1->addArg(buffer);
     kernel2->addArg();
+    kernel2->addArg();
     kernel2->addArg(cc.getPaddedNumAtoms());
     kernel2->addArg(cc.getPosq());
     kernel2->addArg(referencePos);
@@ -170,14 +181,10 @@ void CommonCalcEuleranglesForceKernel::initialize(const System& system, const Eu
     kernel2->addArg(eigval);
     kernel2->addArg(eigvec);
     kernel2->addArg(anglederiv);
+    kernel2->addArg(qrot);
     kernel2->addArg(cc.getLongForceBuffer());
     // for fitting group 
-    int fit_numParticles = force.getFittingParticles().size();
-    if (fit_numParticles != 0) {
-        enable_fitting = true;
-        fit_referencePos.initialize(cc, system.getNumParticles(), 4*elementSize, "referencePos");
-        fit_particles.initialize<int>(cc, fit_numParticles, "particles");
-        fit_buffer.initialize(cc, 9, elementSize, "buffer");
+    if (enable_fitting != 0) {
         //fit_poscenter.initialize(cc, 3, elementSize, "poscenter");
         kernel3 = program->createKernel("computeEuleranglesPart1");
         kernel3->addArg();
@@ -189,7 +196,8 @@ void CommonCalcEuleranglesForceKernel::initialize(const System& system, const Eu
         kernel3->addArg(poscenter);
         kernel3->addArg(qrot);
         kernel3->addArg(fit_buffer);  
-    }     
+    }  
+   
 }
 
 void CommonCalcEuleranglesForceKernel::recordParameters(const EuleranglesForce& force) {
@@ -250,7 +258,7 @@ double CommonCalcEuleranglesForceKernel::executeImpl(OpenMM::ContextImpl& contex
     if (!enable_fitting) {
         int numParticles = particles.getSize();
         kernel1->setArg(0, numParticles);
-        kernel1->setArg(1, true);
+        kernel1->setArg(1, false);
         kernel1->setArg(2, false);
         kernel1->execute(blockSize, blockSize);
         // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
@@ -275,50 +283,68 @@ double CommonCalcEuleranglesForceKernel::executeImpl(OpenMM::ContextImpl& contex
         eigvec.upload(eigvec_buffer, true);
         anglederiv.upload(anglederiv_buffer);
         kernel2->setArg(0, numParticles);
+        kernel2->setArg(1, false);
         kernel2->execute(numParticles);
     }
     else{
         // center the current positions using the center of fitting group atoms
         int fit_numParticles = fit_particles.getSize();
         kernel3->setArg(0, fit_numParticles);
-        kernel3->setArg(1, true);
+        kernel3->setArg(1, false); 
         kernel3->setArg(2, false);
         kernel3->execute(blockSize, blockSize);
+        // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
+        // and eigenvector.
         vector<REAL> fit_C; 
         fit_buffer.download(fit_C);
+        // JAMA::Eigenvalue may run into an infinite loop if we have any NaN
+        for (int i = 0; i < 9; i++) {
+            if (fit_C[i] != fit_C[i])
+                throw OpenMMException("NaN encountered during Eulerangles force calculation");
+        }
         // compute optimal rotation 
         vector<REAL> fit_eigval_buffer;
         vector<mm_double4> fit_eigvec_buffer;
         vector<double> fit_q(4);
         calculateQRotation(fit_C, fit_eigvec_buffer, fit_eigval_buffer, fit_q);  
-        vector<mm_double4> eigvec_buffer;
-        vector<REAL> eigval_buffer, anglederiv_buffer(4);
-        calculateDeriv(fit_q, angle, anglederiv_buffer, energy);
-        cout<< energy << "\n";
+        
         // center, apply fit rotation and calculate optimal rotation between particles and its reference
         // center particles using the cog of fitting group atoms
-        // vector<REAL> fit_center = {static_cast<REAL>(fit_C[10]), static_cast<REAL>(fit_C[11]), static_cast<REAL>(fit_C[12])}; 
-        // vector<REAL> qrot_buffer = {static_cast<REAL>(fit_q[0]), static_cast<REAL>(fit_q[1]), 
-        //                      static_cast<REAL>(fit_q[2]), static_cast<REAL>(fit_q[3])};
-        // int numParticles = particles.getSize();
-        // poscenter.upload(fit_center);
-        // qrot.upload(qrot_buffer);
-        // kernel1->setArg(0, numParticles);
-        // kernel1->setArg(1, true);
-        // kernel1->setArg(2, false);
-        // kernel1->execute(blockSize, blockSize);        
-        // vector<REAL> C; 
-        // fit_buffer.download(C);   
+        vector<REAL> fit_center = {static_cast<REAL>(fit_C[10]), static_cast<REAL>(fit_C[11]), static_cast<REAL>(fit_C[12])}; 
+        vector<REAL> qrot_buffer = {static_cast<REAL>(fit_q[0]), static_cast<REAL>(fit_q[1]), 
+                             static_cast<REAL>(fit_q[2]), static_cast<REAL>(fit_q[3])};
+        int numParticles = particles.getSize();
+        poscenter.upload(fit_center);
+        qrot.upload(qrot_buffer);
+        kernel1->setArg(0, numParticles);
+        kernel1->setArg(1, true); // uses the given center for recentering 
+        kernel1->setArg(2, true); // rotates using the fit_q rotation 
+        kernel1->execute(blockSize, blockSize);
+        // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
+        // and eigenvector.
+        vector<REAL> C;
+        buffer.download(C);
+
+        // JAMA::Eigenvalue may run into an infinite loop if we have any NaN
+        for (int i = 0; i < 9; i++) {
+            if (C[i] != C[i])
+                throw OpenMMException("NaN encountered during Eulerangles force calculation");
+        }
+        vector<REAL> eigval_buffer, anglederiv_buffer(4);
+        vector<mm_double4> eigvec_buffer;
+        vector<double> q(4);
+        calculateQRotation(C, eigvec_buffer, eigval_buffer, q);
+        //cout<< q[0] << q[1] << q[2] << q[3] << "\n";
+        calculateDeriv(q, angle, anglederiv_buffer, energy);
         
-        // // compute particles rotation q
-        // vector<REAL> eigval_buffer, anglederiv_buffer(4);
-        // vector<mm_double4> eigvec_buffer;
-        // vector<double> q(4);
-        // calculateQRotation(C, eigvec_buffer, eigval_buffer, q);
-        // cout << q[0] << "\t" << q[1] << "\t" << q[2] << "\n";
-        // calculateDeriv(q, angle, anglederiv_buffer, energy);
-        // cout<< energy << "\n";
-        // apply forces 
+        // compute forces forces 
+        eigval.upload(eigval_buffer);
+        eigvec.upload(eigvec_buffer, true);
+        qrot.upload(qrot_buffer);
+        anglederiv.upload(anglederiv_buffer);
+        kernel2->setArg(0, numParticles);
+        kernel2->setArg(1, true); // apply fitting rotation 
+        kernel2->execute(numParticles);        
              
     }
 
@@ -326,18 +352,18 @@ double CommonCalcEuleranglesForceKernel::executeImpl(OpenMM::ContextImpl& contex
 }
 
 void CommonCalcEuleranglesForceKernel::copyParametersToContext(OpenMM::ContextImpl& context, const EuleranglesForce& force) {
-    ContextSelector selector(cc);
-    if (referencePos.getSize() != force.getReferencePositions().size())
-        throw OpenMMException("updateParametersInContext: The number of reference positions has changed");
-    int numParticles = force.getParticles().size();
-    if (numParticles == 0)
-        numParticles = context.getSystem().getNumParticles();
-    if (numParticles != particles.getSize())
-        particles.resize(numParticles);
-    recordParameters(force);
+//     ContextSelector selector(cc);
+//     if (referencePos.getSize() != force.getReferencePositions().size())
+//         throw OpenMMException("updateParametersInContext: The number of reference positions has changed");
+//     int numParticles = force.getParticles().size();
+//     if (numParticles == 0)
+//         numParticles = context.getSystem().getNumParticles();
+//     if (numParticles != particles.getSize())
+//         particles.resize(numParticles);
+//     recordParameters(force);
     
-    // Mark that the current reordering may be invalid.
+//     // Mark that the current reordering may be invalid.
     
-   info->updateParticles();
-   cc.invalidateMolecules(info);
+//    info->updateParticles();
+//    cc.invalidateMolecules(info);
 }
