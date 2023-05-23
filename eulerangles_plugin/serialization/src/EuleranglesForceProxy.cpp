@@ -52,9 +52,10 @@ void EuleranglesForceProxy::serialize(const void* object, SerializationNode& nod
     SerializationNode& particlesNode = node.createChildNode("Particles");
     for (int i : force.getParticles())
        particlesNode.createChildNode("Particle").setIntProperty("index", i);
-       
+    
+    SerializationNode& fittingparticlesNode = node.createChildNode("FittingParticles");
     for (int i : force.getFittingParticles())
-       particlesNode.createChildNode("FittingParticle").setIntProperty("index", i);      
+       fittingparticlesNode.createChildNode("Particle").setIntProperty("index", i);      
     
 }
 
@@ -72,7 +73,7 @@ void* EuleranglesForceProxy::deserialize(const SerializationNode& node) const {
             particles.push_back(particle.getIntProperty("index"));
         vector<int> fitting_particles;
         for (auto& particle : node.getChildNode("FittingParticles").getChildren())
-            particles.push_back(particle.getIntProperty("index"));
+            fitting_particles.push_back(particle.getIntProperty("index"));
         string angle;
         angle = node.getStringProperty("angle");
         force = new EuleranglesForce(positions, particles, fitting_particles, angle);

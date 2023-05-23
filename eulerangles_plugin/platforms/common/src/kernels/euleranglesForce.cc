@@ -37,7 +37,6 @@ KERNEL void computeEuleranglesPart1(int numParticles, bool usecenter, bool rotat
     LOCAL volatile real temp[THREAD_BLOCK_SIZE];
 
     // Compute the center of the particle positions.
-    
     real3 center = make_real3(0, 0, 0); 
     if (!usecenter) {
         for (int i = LOCAL_ID; i < numParticles; i += LOCAL_SIZE)
@@ -49,6 +48,7 @@ KERNEL void computeEuleranglesPart1(int numParticles, bool usecenter, bool rotat
     else
         center = make_real3(poscenter[0], poscenter[1], poscenter[2]);
     
+    //printf("Device %f \t %f \t %f\n", poscenter[0], poscenter[1], poscenter[2]);
     // Compute the correlation matrix.
     
     real R[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
@@ -60,9 +60,9 @@ KERNEL void computeEuleranglesPart1(int numParticles, bool usecenter, bool rotat
         real3 pos = trimTo3(posq[index]) - center;
         if (rotate) {
             real3 a, b;
-            a = cross(vq, pos) + q0 * pos;
-            b = cross(vq, a);
-            pos = b + b + pos;  
+            a = cross(pos, vq) + q0 * pos;        
+            b = cross(a, vq);
+            pos = b + b + pos;
         }
             // do q rotate 
             
@@ -89,12 +89,12 @@ KERNEL void computeEuleranglesPart1(int numParticles, bool usecenter, bool rotat
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++)
                 buffer[3*i+j] = R[i][j];
-        buffer[9] = sum;
-        buffer[10] = center.x;
-        buffer[11] = center.y;
-        buffer[12] = center.z;
+        buffer[9] = center.x;
+        buffer[10] = center.y;
+        buffer[11] = center.z;
     }
 }
+
 
 
 /**
@@ -102,7 +102,7 @@ KERNEL void computeEuleranglesPart1(int numParticles, bool usecenter, bool rotat
  */
 KERNEL void computeEuleranglesForces(int numParticles, bool rotate, int paddedNumAtoms, GLOBAL const real4* RESTRICT posq, GLOBAL const real4* RESTRICT referencePos,
         GLOBAL const int* RESTRICT particles, GLOBAL real* eigval, GLOBAL const real4* RESTRICT eigvec, 
-        const GLOBAL real* RESTRICT anglederiv, const GLOBAL real* RESTRICT qrot, GLOBAL mm_long* RESTRICT forceBuffers) {
+         GLOBAL const real* RESTRICT anglederiv, GLOBAL const real* RESTRICT qrot_deriv, GLOBAL mm_long* RESTRICT forceBuffers) {
     //real3 center = make_real3(poscenter[0], poscenter[1], poscenter[2]);
     real scale = 1 / (real) (numParticles);
     real3 ds_2[4][4];
@@ -113,8 +113,8 @@ KERNEL void computeEuleranglesForces(int numParticles, bool rotate, int paddedNu
     real Q3[4] = {eigvec[3].x,  eigvec[3].y, eigvec[3].z, eigvec[3].w};
     //printf("***********************************\n");
     //printf("%d \t %d \t %d \t\n", GLOBAL_ID, GLOBAL_SIZE, numParticles);
-    real q0 = qrot[0];
-    real3 vq = make_real3(qrot[1], qrot[2], qrot[3]);
+    real q0 = qrot_deriv[0];
+    real3 vq = make_real3(qrot_deriv[1], qrot_deriv[2], qrot_deriv[3]);
     for (int i = GLOBAL_ID; i < numParticles; i += GLOBAL_SIZE) {
         int index = particles[i];
         //real3 pos = trimTo3(posq[index]) - center;
@@ -137,20 +137,9 @@ KERNEL void computeEuleranglesForces(int numParticles, bool rotate, int paddedNu
         ds_2[2][3] = ds_2[3][2];
         ds_2[3][3] = make_real3( -rx, -ry,  rz);
         
-        // if (qidx == 0)
-        //     printf("%d dq= %4.2f %4.2f %4.2f \n", index, refPos.x, refPos.y, refPos.z);  
-        
-     ///   real3 dl0_2;
-        //dl0_2 = make_real3(0, 0, 0);
         real3 dq0_2[4];
-        // for (unsigned i = 0; i < 4; i++) {
-        //     for (unsigned j = 0; j < 4; j++) {
-        //         dl0_2 += -1 * (Q0[i] * ds_2[i][j] * Q0[j]);
-        //     }
-        // } 
-       
+        dq0_2[0] = make_real3(0, 0, 0); dq0_2[1] = make_real3(0, 0, 0); dq0_2[2] = make_real3(0, 0, 0); dq0_2[3] = make_real3(0, 0, 0);
         for (int p=0; p<4; p++){
-            dq0_2[p] = make_real3(0, 0, 0);
             for (int i=0 ;i<4; i++) {
                 for (int j=0; j<4; j++) {
                     dq0_2[p] += -1 * ((Q1[i] * ds_2[i][j] * Q0[j]) / (L0-L1) * Q1[p] 
@@ -165,17 +154,16 @@ KERNEL void computeEuleranglesForces(int numParticles, bool rotate, int paddedNu
             for(int i=0; i<4; i++)
             {
                 real3 a, b;
-                a = cross(vq, dq0_2[i]) + q0 * dq0_2[i];
-                b = cross(vq, a);
+                a = cross(dq0_2[i], vq) + q0 * dq0_2[i];
+                b = cross(a, vq);
                 dq0_2[i] = b + b + dq0_2[i]; 
             }          
             
         }
         
-        
         real3 force = make_real3(0, 0, 0);
         for(int i=0; i<4; i++) 
-            force += dq0_2[i] * anglederiv[i]* scale; 
+            force += dq0_2[i] * anglederiv[i] * scale; 
         // if (qidx == 0 && index==0)
         //     printf("%d dq= %4.10f %4.10f %4.10f \n", index, force.x, force.y, force.z); 
         forceBuffers[index] += (mm_long) (force.x*0x100000000);

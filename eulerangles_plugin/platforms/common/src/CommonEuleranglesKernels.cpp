@@ -96,11 +96,11 @@ void calculateQRotation(std::vector<REAL> C, vector<mm_double4>& eigvec_buffer, 
         for (int j=1;j<4;j++) 
             S_eigvec[i][j] = -S_eigvec[i][j];
     }
-    // set the q
+    // set q
     for (int i=0; i<4; i++)
-        q[i] = S_eigvec[0][i]; 
+        q.push_back(S_eigvec[0][i]); 
     eigval_buffer = {static_cast<REAL>(S_eigval[0]), static_cast<REAL>(S_eigval[1]), 
-                                static_cast<REAL>(S_eigval[2]), static_cast<REAL>(S_eigval[3])}; 
+                                static_cast<REAL>(S_eigval[2]), static_cast<REAL>(S_eigval[3])};                         
     
     for (int i=0;i<4;i++) 
         eigvec_buffer.push_back(mm_double4(S_eigvec[i][0], S_eigvec[i][1], S_eigvec[i][2], S_eigvec[i][3]));
@@ -138,16 +138,17 @@ void CommonCalcEuleranglesForceKernel::initialize(const System& system, const Eu
         enable_fitting = true;
         fit_referencePos.initialize(cc, system.getNumParticles(), 4*elementSize, "referencePos");
         fit_particles.initialize<int>(cc, fit_numParticles, "particles");
-        fit_buffer.initialize(cc, 13, elementSize, "buffer");
+        fit_buffer.initialize(cc, 12, elementSize, "buffer");
     }
         
     referencePos.initialize(cc, system.getNumParticles(), 4*elementSize, "referencePos");
     particles.initialize<int>(cc, numParticles, "particles");
-    buffer.initialize(cc, 13, elementSize, "buffer");
+    buffer.initialize(cc, 12, elementSize, "buffer");
     eigval.initialize(cc, 4, elementSize, "eigval");
     eigvec.initialize(cc, 4, 4*elementSize, "eigvec");
     poscenter.initialize(cc, 3, elementSize, "poscenter");
     qrot.initialize(cc, 4, elementSize, "qrot");
+    qrot_deriv.initialize(cc, 4, elementSize, "qrot_dev");
     anglederiv.initialize(cc, 4, elementSize, "anglederiv");
     
     
@@ -181,7 +182,7 @@ void CommonCalcEuleranglesForceKernel::initialize(const System& system, const Eu
     kernel2->addArg(eigval);
     kernel2->addArg(eigvec);
     kernel2->addArg(anglederiv);
-    kernel2->addArg(qrot);
+    kernel2->addArg(qrot_deriv);
     kernel2->addArg(cc.getLongForceBuffer());
     // for fitting group 
     if (enable_fitting != 0) {
@@ -225,9 +226,9 @@ void CommonCalcEuleranglesForceKernel::recordParameters(const EuleranglesForce& 
 
    // fit_particles 
    if (enable_fitting){
-        vector<int> particleVec = force.getFittingParticles();
-        vector<Vec3> centeredPositions = force.getReferencePositions();
-        Vec3 center;
+        particleVec = force.getFittingParticles();
+        centeredPositions = force.getReferencePositions();
+        center;
         for (int i : particleVec)
             center += centeredPositions[i];
         center /= particleVec.size();
@@ -273,7 +274,7 @@ double CommonCalcEuleranglesForceKernel::executeImpl(OpenMM::ContextImpl& contex
         }
         vector<REAL> eigval_buffer, anglederiv_buffer(4);
         vector<mm_double4> eigvec_buffer;
-        vector<double> q(4);
+        vector<double> q;
         calculateQRotation(C, eigvec_buffer, eigval_buffer, q);
     
         calculateDeriv(q, angle, anglederiv_buffer, energy);
@@ -287,7 +288,7 @@ double CommonCalcEuleranglesForceKernel::executeImpl(OpenMM::ContextImpl& contex
         kernel2->execute(numParticles);
     }
     else{
-        // center the current positions using the center of fitting group atoms
+        //center the current positions using the center of fitting group atoms
         int fit_numParticles = fit_particles.getSize();
         kernel3->setArg(0, fit_numParticles);
         kernel3->setArg(1, false); 
@@ -303,16 +304,20 @@ double CommonCalcEuleranglesForceKernel::executeImpl(OpenMM::ContextImpl& contex
                 throw OpenMMException("NaN encountered during Eulerangles force calculation");
         }
         // compute optimal rotation 
-        vector<REAL> fit_eigval_buffer;
+        //vector<REAL> fit_center = {static_cast<REAL>(fit_C[10]), static_cast<REAL>(fit_C[11]), static_cast<REAL>(fit_C[12])}; 
+        vector<REAL> fit_center = {fit_C[9], fit_C[10], fit_C[11]};
+        //cout<< fit_center[0] << "\t" << fit_center[1]<< "\t" << fit_center[2] << "\n"; 
+        vector<REAL> fit_eigval_buffer, anglederiv_buffer(4);
         vector<mm_double4> fit_eigvec_buffer;
-        vector<double> fit_q(4);
+        vector<double> fit_q;
         calculateQRotation(fit_C, fit_eigvec_buffer, fit_eigval_buffer, fit_q);  
-        
+        //calculateDeriv(fit_q, angle, anglederiv_buffer, energy);
+         
         // center, apply fit rotation and calculate optimal rotation between particles and its reference
         // center particles using the cog of fitting group atoms
-        vector<REAL> fit_center = {static_cast<REAL>(fit_C[10]), static_cast<REAL>(fit_C[11]), static_cast<REAL>(fit_C[12])}; 
+        
         vector<REAL> qrot_buffer = {static_cast<REAL>(fit_q[0]), static_cast<REAL>(fit_q[1]), 
-                             static_cast<REAL>(fit_q[2]), static_cast<REAL>(fit_q[3])};
+                                    static_cast<REAL>(fit_q[2]), static_cast<REAL>(fit_q[3])};
         int numParticles = particles.getSize();
         poscenter.upload(fit_center);
         qrot.upload(qrot_buffer);
@@ -330,40 +335,40 @@ double CommonCalcEuleranglesForceKernel::executeImpl(OpenMM::ContextImpl& contex
             if (C[i] != C[i])
                 throw OpenMMException("NaN encountered during Eulerangles force calculation");
         }
-        vector<REAL> eigval_buffer, anglederiv_buffer(4);
+        vector<REAL> eigval_buffer;
         vector<mm_double4> eigvec_buffer;
-        vector<double> q(4);
+        vector<double> q;
         calculateQRotation(C, eigvec_buffer, eigval_buffer, q);
-        //cout<< q[0] << q[1] << q[2] << q[3] << "\n";
+        //cout<< q[0] << "\t" << q[1] << "\t" << q[2] <<"\t"<< q[3] << "\n";
         calculateDeriv(q, angle, anglederiv_buffer, energy);
         
-        // compute forces forces 
+        vector<REAL> qrot_buffer_inv = {static_cast<REAL>(fit_q[0]), -static_cast<REAL>(fit_q[1]), 
+                                    -static_cast<REAL>(fit_q[2]), -static_cast<REAL>(fit_q[3])};
+        // // compute forces forces 
         eigval.upload(eigval_buffer);
         eigvec.upload(eigvec_buffer, true);
-        qrot.upload(qrot_buffer);
+        qrot_deriv.upload(qrot_buffer_inv);
         anglederiv.upload(anglederiv_buffer);
         kernel2->setArg(0, numParticles);
         kernel2->setArg(1, true); // apply fitting rotation 
-        kernel2->execute(numParticles);        
-             
+        kernel2->execute(numParticles);              
     }
-
     return energy;
 }
 
 void CommonCalcEuleranglesForceKernel::copyParametersToContext(OpenMM::ContextImpl& context, const EuleranglesForce& force) {
-//     ContextSelector selector(cc);
-//     if (referencePos.getSize() != force.getReferencePositions().size())
-//         throw OpenMMException("updateParametersInContext: The number of reference positions has changed");
-//     int numParticles = force.getParticles().size();
-//     if (numParticles == 0)
-//         numParticles = context.getSystem().getNumParticles();
-//     if (numParticles != particles.getSize())
-//         particles.resize(numParticles);
-//     recordParameters(force);
+    ContextSelector selector(cc);
+    if (referencePos.getSize() != force.getReferencePositions().size())
+        throw OpenMMException("updateParametersInContext: The number of reference positions has changed");
+    int numParticles = force.getParticles().size();
+    if (numParticles == 0)
+        numParticles = context.getSystem().getNumParticles();
+    if (numParticles != particles.getSize())
+        particles.resize(numParticles);
+    recordParameters(force);
     
-//     // Mark that the current reordering may be invalid.
+    // Mark that the current reordering may be invalid.
     
-//    info->updateParticles();
-//    cc.invalidateMolecules(info);
+   info->updateParticles();
+   cc.invalidateMolecules(info);
 }
