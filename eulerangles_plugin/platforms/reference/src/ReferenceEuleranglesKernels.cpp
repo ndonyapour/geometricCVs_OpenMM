@@ -188,7 +188,7 @@ double ReferenceCalcEuleranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
         for (int i = 0; i < numParticles; i++) {
             for (int qidx = 0; qidx < 4; qidx++ ) {
                 Vec3 deriv = qrot.quaternionRotate(qrot.quaternionInvert(fit_qrot.q), qrot.dQ0_2[i][qidx]);
-                forces[particles[i]] += deriv * deriv_const[qidx]/numParticles;   
+                forces[particles[i]] += -deriv * deriv_const[qidx]/numParticles;   
                 
             } 
         }
