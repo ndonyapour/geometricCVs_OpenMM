@@ -75,7 +75,7 @@ public:
     explicit EuleranglesForce(const std::vector<Vec3>& referencePositions,
                        const std::vector<int>& particles=std::vector<int>(), 
                        const std::vector<int>& fitting_particles=std::vector<int>(),
-                       const std::string& angle="Euler");
+                       const std::string& angle="Theta");
     /**
      * Get the reference positions to compute the deviation from.
      */

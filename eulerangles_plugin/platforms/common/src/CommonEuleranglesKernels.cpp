@@ -105,15 +105,27 @@ void calculateQRotation(std::vector<REAL> C, vector<mm_double4>& eigvec_buffer, 
     for (int i=0;i<4;i++) 
         eigvec_buffer.push_back(mm_double4(S_eigvec[i][0], S_eigvec[i][1], S_eigvec[i][2], S_eigvec[i][3]));
 }
+
 double asinDerivative(double x) {
     return 1 / sqrt(1 - x * x);
+}
+
+void atan2Derivatives(double x, double y, double& dAtan2_dx, double& dAtan2_dy) {
+    double atan2_xy = std::atan2(x, y);
+    double denominator = x * x + y * y;
+    
+    // Derivative with respect to x: d(atan2(x, y))/dx = y / (x^2 + y^2)
+    dAtan2_dx = y / denominator;
+
+    // Derivative with respect to y: d(atan2(x, y))/dy = -x / (x^2 + y^2)
+    dAtan2_dy = -x / denominator;
 }
 
 template <class REAL>
 void calculateDeriv(std::vector<double> q, std::string angle, vector<REAL>& anglederiv_buffer, double& energy){
     double radian_to_degree = 180 / 3.1415926;
-    if (angle == "Euler") {
-        double q1 = q[0], q2 = q[1], q3 = q[2], q4 = q[3];
+    double q1 = q[0], q2 = q[1], q3 = q[2], q4 = q[3];
+    if (angle == "Theta") {
         double x = 2 * (q1 * q3 - q4 * q2);
         energy = radian_to_degree * asin(x);
         double deriv = 2 * radian_to_degree * asinDerivative(x);
@@ -121,8 +133,30 @@ void calculateDeriv(std::vector<double> q, std::string angle, vector<REAL>& angl
         anglederiv_buffer[1] = static_cast<REAL>(-deriv * q4);
         anglederiv_buffer[2] = static_cast<REAL>(deriv * q1);
         anglederiv_buffer[3] = static_cast<REAL>(-deriv * q2);
+        
     } 
-    
+    else if (angle == "Phi"){
+        double x = 2*(q1*q2+q3*q4), y = 1-2*(q2*q2+q3*q3);
+        energy = radian_to_degree * atan2(x, y);  
+        double deriv_x, deriv_y;
+        atan2Derivatives(x, y, deriv_x, deriv_y);
+        anglederiv_buffer[0] = static_cast<REAL>(2 * radian_to_degree * q2 * deriv_x);  // dE/dq1
+        anglederiv_buffer[1] = static_cast<REAL>(2 * radian_to_degree * (q1 * deriv_x - 2 * q2 * deriv_y));  // dE/dq2
+        anglederiv_buffer[2] = static_cast<REAL>(2 * radian_to_degree * (q4 * deriv_x - 2 * q3 * deriv_y)); // dE/dq3
+        anglederiv_buffer[3] = static_cast<REAL>(2 * radian_to_degree * q3 * deriv_x); // dE/dq4
+    }
+    else if (angle == "Psi"){
+        double x = 2*(q1*q4+q2*q3), y = 1-2*(q3*q3+q4*q4);
+        energy = radian_to_degree * atan2(x, y); 
+        double deriv_x, deriv_y;
+        atan2Derivatives(x, y, deriv_x, deriv_y);
+        anglederiv_buffer[0] = static_cast<REAL>(2 * radian_to_degree * q4 * deriv_x);  // dE/dq1
+        anglederiv_buffer[1] = static_cast<REAL>(2 * radian_to_degree * q3 * deriv_x);  // dE/dq2
+        anglederiv_buffer[2] = static_cast<REAL>(2 * radian_to_degree * (q2 * deriv_x - 2 * q3 * deriv_y));  // dE/dq3
+        anglederiv_buffer[3] = static_cast<REAL>(2 * radian_to_degree * (q1 * deriv_x - 2 * q4 * deriv_y)); // dE/dq4
+    }
+    else
+         throw OpenMMException("updateParametersInContext: The angle type is not defined");
 }
 void CommonCalcEuleranglesForceKernel::initialize(const System& system, const EuleranglesForce& force) {
     ContextSelector selector(cc);
