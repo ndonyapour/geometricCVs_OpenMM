@@ -156,7 +156,7 @@ void calculateDeriv(std::vector<double> q, std::string angle, vector<REAL>& angl
         anglederiv_buffer[3] = static_cast<REAL>(2 * radian_to_degree * (q1 * deriv_x - 2 * q4 * deriv_y)); // dE/dq4
     }
     else
-         throw OpenMMException("updateParametersInContext: The angle type is not defined");
+         throw OpenMMException("updateParametersInContext: The angle type is not correct");
 }
 void CommonCalcEuleranglesForceKernel::initialize(const System& system, const EuleranglesForce& force) {
     ContextSelector selector(cc);
@@ -376,12 +376,12 @@ double CommonCalcEuleranglesForceKernel::executeImpl(OpenMM::ContextImpl& contex
         //cout<< q[0] << "\t" << q[1] << "\t" << q[2] <<"\t"<< q[3] << "\n";
         calculateDeriv(q, angle, anglederiv_buffer, energy);
         
-        vector<REAL> qrot_buffer_inv = {static_cast<REAL>(fit_q[0]), -static_cast<REAL>(fit_q[1]), 
+        vector<REAL> inv_qrot_buffer = {static_cast<REAL>(fit_q[0]), -static_cast<REAL>(fit_q[1]), 
                                     -static_cast<REAL>(fit_q[2]), -static_cast<REAL>(fit_q[3])};
         // // compute forces forces 
         eigval.upload(eigval_buffer);
         eigvec.upload(eigvec_buffer, true);
-        qrot_deriv.upload(qrot_buffer_inv);
+        qrot_deriv.upload(inv_qrot_buffer);
         anglederiv.upload(anglederiv_buffer);
         kernel2->setArg(0, numParticles);
         kernel2->setArg(1, true); // apply fitting rotation 

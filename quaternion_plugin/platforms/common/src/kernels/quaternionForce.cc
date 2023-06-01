@@ -122,16 +122,7 @@ KERNEL void computeQuaternionForces(int numParticles, int qidx, int paddedNumAto
         // if (qidx == 0)
         //     printf("%d dq= %4.2f %4.2f %4.2f \n", index, refPos.x, refPos.y, refPos.z);  
         
-        real3 dl0_2;
-        real3 dq0_2;
-        dl0_2 = make_real3(0, 0, 0);
-        dq0_2 = make_real3(0, 0, 0);
-        for (unsigned i = 0; i < 4; i++) {
-            for (unsigned j = 0; j < 4; j++) {
-                dl0_2 += -1 * (Q0[i] * ds_2[i][j] * Q0[j]);
-            }
-        } 
-       
+        real3 dq0_2 = make_real3(0, 0, 0);       
         for (int i=0 ;i<4; i++) {
             for (int j=0; j<4; j++) {
                 dq0_2 += -1 * ((Q1[i] * ds_2[i][j] * Q0[j]) / (L0-L1) * Q1[qidx] 

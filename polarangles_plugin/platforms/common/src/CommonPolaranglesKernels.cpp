@@ -106,8 +106,18 @@ void calculateQRotation(std::vector<REAL> C, vector<mm_double4>& eigvec_buffer, 
         eigvec_buffer.push_back(mm_double4(S_eigvec[i][0], S_eigvec[i][1], S_eigvec[i][2], S_eigvec[i][3]));
 }
 
-double asinDerivative(double x) {
-    return 1 / sqrt(1 - x * x);
+double acosDerivative(double x) {
+  // Check if the input is within the valid range of -1 to 1
+  if (x < -1.0 || x > 1.0) {
+    // Handle invalid input, return NaN or throw an exception
+    // depending on your requirements.
+    // For simplicity, let's return NaN in this example.
+    throw OpenMMException("updateParametersInContext: The angle values are NaN");
+    return NAN;
+  }
+  
+  // Calculate the derivative of acos(x)
+  return -1.0 / sqrt(1.0 - x*x);
 }
 
 void atan2Derivatives(double x, double y, double& dAtan2_dx, double& dAtan2_dy) {
@@ -122,42 +132,33 @@ void atan2Derivatives(double x, double y, double& dAtan2_dx, double& dAtan2_dy) 
 }
 
 template <class REAL>
-void calculateDeriv(std::vector<double> q, std::string angle, vector<REAL>& anglederiv_buffer, double& energy){
+void calculateDeriv(Vec3 unit_vec, std::string angle, mm_double4& deriv_const, double& energy){
     double radian_to_degree = 180 / 3.1415926;
-    double q1 = q[0], q2 = q[1], q3 = q[2], q4 = q[3];
+    double i1 = unit_vec[0], i2 = unit_vec[1],  i3 = unit_vec[2];
     if (angle == "Theta") {
-        double x = 2 * (q1 * q3 - q4 * q2);
-        energy = radian_to_degree * asin(x);
-        double deriv = 2 * radian_to_degree * asinDerivative(x);
-        anglederiv_buffer[0] = static_cast<REAL>(deriv * q3);
-        anglederiv_buffer[1] = static_cast<REAL>(-deriv * q4);
-        anglederiv_buffer[2] = static_cast<REAL>(deriv * q1);
-        anglederiv_buffer[3] = static_cast<REAL>(-deriv * q2);
-        
+        energy = radian_to_degree * acos(-i2);
+        deriv_const = mm_double4(0.0, - acosDerivative(-i2), 0.0, 0.0);
     } 
     else if (angle == "Phi"){
-        double x = 2*(q1*q2+q3*q4), y = 1-2*(q2*q2+q3*q3);
-        energy = radian_to_degree * atan2(x, y);  
+        energy = radian_to_degree * atan2(i3, i1);
         double deriv_x, deriv_y;
-        atan2Derivatives(x, y, deriv_x, deriv_y);
-        anglederiv_buffer[0] = static_cast<REAL>(2 * radian_to_degree * q2 * deriv_x);  // dE/dq1
-        anglederiv_buffer[1] = static_cast<REAL>(2 * radian_to_degree * (q1 * deriv_x - 2 * q2 * deriv_y));  // dE/dq2
-        anglederiv_buffer[2] = static_cast<REAL>(2 * radian_to_degree * (q4 * deriv_x - 2 * q3 * deriv_y)); // dE/dq3
-        anglederiv_buffer[3] = static_cast<REAL>(2 * radian_to_degree * q3 * deriv_x); // dE/dq4
-    }
-    else if (angle == "Psi"){
-        double x = 2*(q1*q4+q2*q3), y = 1-2*(q3*q3+q4*q4);
-        energy = radian_to_degree * atan2(x, y); 
-        double deriv_x, deriv_y;
-        atan2Derivatives(x, y, deriv_x, deriv_y);
-        anglederiv_buffer[0] = static_cast<REAL>(2 * radian_to_degree * q4 * deriv_x);  // dE/dq1
-        anglederiv_buffer[1] = static_cast<REAL>(2 * radian_to_degree * q3 * deriv_x);  // dE/dq2
-        anglederiv_buffer[2] = static_cast<REAL>(2 * radian_to_degree * (q2 * deriv_x - 2 * q3 * deriv_y));  // dE/dq3
-        anglederiv_buffer[3] = static_cast<REAL>(2 * radian_to_degree * (q1 * deriv_x - 2 * q4 * deriv_y)); // dE/dq4
+        atan2Derivatives(i3, i1, deriv_x, deriv_y);
+        deriv_const = mm_double4(radian_to_degree * deriv_y, 0.0, radian_to_degree * deriv_x, 0.0);
     }
     else
-         throw OpenMMException("updateParametersInContext: The angle type is not defined");
+        throw OpenMMException("updateParametersInContext: The angle type is not correct");   
 }
+
+// From OpenMM referenceForce
+double modulo(const Vec3& deltaR) {
+  
+    return sqrt(deltaR[0]*deltaR[0] + deltaR[1]*deltaR[1] + deltaR[2]*deltaR[2]);
+}
+
+Vec3 getDeltaR(const Vec3& atomCoordinatesI, const Vec3& atomCoordinatesJ) {
+    return atomCoordinatesJ - atomCoordinatesI;
+}
+
 void CommonCalcPolaranglesForceKernel::initialize(const System& system, const PolaranglesForce& force) {
     ContextSelector selector(cc);
     bool useDouble = cc.getUseDoublePrecision();
@@ -168,12 +169,9 @@ void CommonCalcPolaranglesForceKernel::initialize(const System& system, const Po
         numParticles = system.getNumParticles();
         
     int fit_numParticles = force.getFittingParticles().size();
-    if (fit_numParticles != 0) {
-        enable_fitting = true;
-        fit_referencePos.initialize(cc, system.getNumParticles(), 4*elementSize, "referencePos");
-        fit_particles.initialize<int>(cc, fit_numParticles, "particles");
-        fit_buffer.initialize(cc, 12, elementSize, "buffer");
-    }
+    fit_referencePos.initialize(cc, system.getNumParticles(), 4*elementSize, "referencePos");
+    fit_particles.initialize<int>(cc, fit_numParticles, "particles");
+    fit_buffer.initialize(cc, 12, elementSize, "buffer");
         
     referencePos.initialize(cc, system.getNumParticles(), 4*elementSize, "referencePos");
     particles.initialize<int>(cc, numParticles, "particles");
@@ -184,6 +182,7 @@ void CommonCalcPolaranglesForceKernel::initialize(const System& system, const Po
     qrot.initialize(cc, 4, elementSize, "qrot");
     qrot_deriv.initialize(cc, 4, elementSize, "qrot_dev");
     anglederiv.initialize(cc, 4, elementSize, "anglederiv");
+    center_buffer.initialize(cc, 3, elementSize, "centr_buffer");
     
     
     recordParameters(force);
@@ -198,15 +197,35 @@ void CommonCalcPolaranglesForceKernel::initialize(const System& system, const Po
     ComputeProgram program = cc.compileProgram(CommonPolaranglesKernelSources::polaranglesForce, defines);
     kernel1 = program->createKernel("computePolaranglesPart1");
     kernel2 = program->createKernel("computePolaranglesForces");
+    kernel3 = program->createKernel("computecCOG");
+    kernel4 = program->createKernel("computecCOG");
+    // compute correlation matrix 
     kernel1->addArg();
     kernel1->addArg();
     kernel1->addArg();
     kernel1->addArg(cc.getPosq());
-    kernel1->addArg(referencePos);
-    kernel1->addArg(particles);
+    kernel1->addArg(fit_referencePos);
+    kernel1->addArg(fit_particles);
     kernel1->addArg(poscenter);
     kernel1->addArg(qrot);
-    kernel1->addArg(buffer);
+    kernel1->addArg(fit_buffer); 
+    
+    // compute COG for the particles
+    kernel3->addArg();
+    kernel3->addArg(cc.getPosq());
+    kernel3->addArg(particles);
+    kernel3->addArg(poscenter);
+    kernel3->addArg(qrot);
+    kernel3->addArg(center_buffer);
+    
+    kernel4->addArg();
+    kernel4->addArg(cc.getPosq());
+    kernel4->addArg(fit_particles);
+    kernel4->addArg(poscenter);
+    kernel4->addArg(qrot);
+    kernel4->addArg(center_buffer);
+    
+    // calculate forces 
     kernel2->addArg();
     kernel2->addArg();
     kernel2->addArg(cc.getPaddedNumAtoms());
@@ -219,19 +238,10 @@ void CommonCalcPolaranglesForceKernel::initialize(const System& system, const Po
     kernel2->addArg(qrot_deriv);
     kernel2->addArg(cc.getLongForceBuffer());
     // for fitting group 
-    if (enable_fitting != 0) {
-        //fit_poscenter.initialize(cc, 3, elementSize, "poscenter");
-        kernel3 = program->createKernel("computePolaranglesPart1");
-        kernel3->addArg();
-        kernel3->addArg();
-        kernel3->addArg();
-        kernel3->addArg(cc.getPosq());
-        kernel3->addArg(fit_referencePos);
-        kernel3->addArg(fit_particles);
-        kernel3->addArg(poscenter);
-        kernel3->addArg(qrot);
-        kernel3->addArg(fit_buffer);  
-    }  
+   
+    //fit_poscenter.initialize(cc, 3, elementSize, "poscenter");
+ 
+ 
    
 }
 
@@ -290,104 +300,86 @@ template <class REAL>
 double CommonCalcPolaranglesForceKernel::executeImpl(OpenMM::ContextImpl& context) {
     // Execute the first kernel.
     double energy;
-    if (!enable_fitting) {
-        int numParticles = particles.getSize();
-        kernel1->setArg(0, numParticles);
-        kernel1->setArg(1, false);
-        kernel1->setArg(2, false);
-        kernel1->execute(blockSize, blockSize);
-        // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
-        // and eigenvector.
-        vector<REAL> C;
-        buffer.download(C);
 
-        // JAMA::Eigenvalue may run into an infinite loop if we have any NaN
-        for (int i = 0; i < 9; i++) {
-            if (C[i] != C[i])
-                throw OpenMMException("NaN encountered during Polarangles force calculation");
-        }
-        vector<REAL> eigval_buffer, anglederiv_buffer(4);
-        vector<mm_double4> eigvec_buffer;
-        vector<double> q;
-        calculateQRotation(C, eigvec_buffer, eigval_buffer, q);
+    //center the current positions using the center of fitting group atoms
+    int fit_numParticles = fit_particles.getSize();
+    kernel1->setArg(0, fit_numParticles);
+    kernel1->setArg(1, false); 
+    kernel1->setArg(2, false);
+    kernel1->execute(blockSize, blockSize);
+    // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
+    // and eigenvector.
+    vector<REAL> fit_C; 
+    fit_buffer.download(fit_C);
+    // JAMA::Eigenvalue may run into an infinite loop if we have any NaN
+    for (int i = 0; i < 9; i++) {
+        if (fit_C[i] != fit_C[i])
+            throw OpenMMException("NaN encountered during Polarangles force calculation");
+    }
+    // compute optimal rotation 
+    //vector<REAL> fit_center = {static_cast<REAL>(fit_C[10]), static_cast<REAL>(fit_C[11]), static_cast<REAL>(fit_C[12])}; 
+    vector<REAL> fit_center = {fit_C[9], fit_C[10], fit_C[11]};
+    //cout<< fit_center[0] << "\t" << fit_center[1]<< "\t" << fit_center[2] << "\n"; 
+    vector<REAL> fit_eigval_buffer;
+    vector<mm_double4> fit_eigvec_buffer;
+    vector<double> fit_q;
+    calculateQRotation(fit_C, fit_eigvec_buffer, fit_eigval_buffer, fit_q);     
+    vector<REAL> qrot_buffer = {static_cast<REAL>(fit_q[0]), static_cast<REAL>(fit_q[1]), 
+                                static_cast<REAL>(fit_q[2]), static_cast<REAL>(fit_q[3])};
     
-        calculateDeriv(q, angle, anglederiv_buffer, energy);
-   
-        // upload data to calculate forces 
-        eigval.upload(eigval_buffer);
-        eigvec.upload(eigvec_buffer, true);
-        anglederiv.upload(anglederiv_buffer);
-        kernel2->setArg(0, numParticles);
-        kernel2->setArg(1, false);
-        kernel2->execute(numParticles);
-    }
-    else{
-        //center the current positions using the center of fitting group atoms
-        int fit_numParticles = fit_particles.getSize();
-        kernel3->setArg(0, fit_numParticles);
-        kernel3->setArg(1, false); 
-        kernel3->setArg(2, false);
-        kernel3->execute(blockSize, blockSize);
-        // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
-        // and eigenvector.
-        vector<REAL> fit_C; 
-        fit_buffer.download(fit_C);
-        // JAMA::Eigenvalue may run into an infinite loop if we have any NaN
-        for (int i = 0; i < 9; i++) {
-            if (fit_C[i] != fit_C[i])
-                throw OpenMMException("NaN encountered during Polarangles force calculation");
-        }
-        // compute optimal rotation 
-        //vector<REAL> fit_center = {static_cast<REAL>(fit_C[10]), static_cast<REAL>(fit_C[11]), static_cast<REAL>(fit_C[12])}; 
-        vector<REAL> fit_center = {fit_C[9], fit_C[10], fit_C[11]};
-        //cout<< fit_center[0] << "\t" << fit_center[1]<< "\t" << fit_center[2] << "\n"; 
-        vector<REAL> fit_eigval_buffer, anglederiv_buffer(4);
-        vector<mm_double4> fit_eigvec_buffer;
-        vector<double> fit_q;
-        calculateQRotation(fit_C, fit_eigvec_buffer, fit_eigval_buffer, fit_q);  
-        //calculateDeriv(fit_q, angle, anglederiv_buffer, energy);
-         
-        // center, apply fit rotation and calculate optimal rotation between particles and its reference
-        // center particles using the cog of fitting group atoms
-        
-        vector<REAL> qrot_buffer = {static_cast<REAL>(fit_q[0]), static_cast<REAL>(fit_q[1]), 
-                                    static_cast<REAL>(fit_q[2]), static_cast<REAL>(fit_q[3])};
-        int numParticles = particles.getSize();
-        poscenter.upload(fit_center);
-        qrot.upload(qrot_buffer);
-        kernel1->setArg(0, numParticles);
-        kernel1->setArg(1, true); // uses the given center for recentering 
-        kernel1->setArg(2, true); // rotates using the fit_q rotation 
-        kernel1->execute(blockSize, blockSize);
-        // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
-        // and eigenvector.
-        vector<REAL> C;
-        buffer.download(C);
+    // compute COG of the rotated particles pos
+    int numParticles = particles.getSize();
+    poscenter.upload(fit_center);
+    qrot.upload(qrot_buffer);
+    kernel3->setArg(0, numParticles);
+    kernel3->execute(blockSize, blockSize);
+    vector<REAL> rotpos_cog_buf;
+    center_buffer.download(rotpos_cog_buf);
+    
+    poscenter.upload(fit_center);
+    qrot.upload(qrot_buffer);
+    kernel4->setArg(0, fit_numParticles);
+    kernel4->execute(blockSize, blockSize);
+    vector<REAL> fit_rotpos_cog_buf;
+    center_buffer.download(fit_rotpos_cog_buf);
+    
+    Vec3 rotpos_cog, fit_rotpos_cog; 
+    rotpos_cog = Vec3(rotpos_cog_buf[0], rotpos_cog_buf[1], rotpos_cog_buf[2]);
+    fit_rotpos_cog = Vec3(fit_rotpos_cog_buf[0], fit_rotpos_cog_buf[1], fit_rotpos_cog_buf[2]);
+    Vec3 distance = getDeltaR(fit_rotpos_cog, rotpos_cog);
+    double norm = modulo(distance);
+    Vec3 unit_vec = distance / norm;
+    // compute COG of the rotated fit particles pos
+    // // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
+    // // and eigenvector.
+    // vector<REAL> C;
+    // buffer.download(C);
 
-        // JAMA::Eigenvalue may run into an infinite loop if we have any NaN
-        for (int i = 0; i < 9; i++) {
-            if (C[i] != C[i])
-                throw OpenMMException("NaN encountered during Polarangles force calculation");
-        }
-        vector<REAL> eigval_buffer;
-        vector<mm_double4> eigvec_buffer;
-        vector<double> q;
-        calculateQRotation(C, eigvec_buffer, eigval_buffer, q);
-        //cout<< q[0] << "\t" << q[1] << "\t" << q[2] <<"\t"<< q[3] << "\n";
-        calculateDeriv(q, angle, anglederiv_buffer, energy);
-        
-        vector<REAL> qrot_buffer_inv = {static_cast<REAL>(fit_q[0]), -static_cast<REAL>(fit_q[1]), 
-                                    -static_cast<REAL>(fit_q[2]), -static_cast<REAL>(fit_q[3])};
-        // // compute forces forces 
-        eigval.upload(eigval_buffer);
-        eigvec.upload(eigvec_buffer, true);
-        qrot_deriv.upload(qrot_buffer_inv);
-        anglederiv.upload(anglederiv_buffer);
-        kernel2->setArg(0, numParticles);
-        kernel2->setArg(1, true); // apply fitting rotation 
-        kernel2->execute(numParticles);              
-    }
-    return energy;
+    // // JAMA::Eigenvalue may run into an infinite loop if we have any NaN
+    // for (int i = 0; i < 9; i++) {
+    //     if (C[i] != C[i])
+    //         throw OpenMMException("NaN encountered during Polarangles force calculation");
+    // }
+    
+    // vector<REAL> eigval_buffer;
+    // vector<mm_double4> eigvec_buffer;
+    // vector<double> q;
+    // calculateQRotation(C, eigvec_buffer, eigval_buffer, q);
+    // //cout<< q[0] << "\t" << q[1] << "\t" << q[2] <<"\t"<< q[3] << "\n";
+    // calculateDeriv(q, angle, anglederiv_buffer, energy);
+    
+    // vector<REAL> qrot_buffer_inv = {static_cast<REAL>(fit_q[0]), -static_cast<REAL>(fit_q[1]), 
+    //                             -static_cast<REAL>(fit_q[2]), -static_cast<REAL>(fit_q[3])};
+    // // // compute forces forces 
+    // eigval.upload(eigval_buffer);
+    // eigvec.upload(eigvec_buffer, true);
+    // qrot_deriv.upload(qrot_buffer_inv);
+    // anglederiv.upload(anglederiv_buffer);
+    // kernel2->setArg(0, numParticles);
+    // kernel2->setArg(1, true); // apply fitting rotation 
+    // kernel2->execute(numParticles);              
+    double radian_to_degree = 180 / 3.1415926;
+    return radian_to_degree * acos(-unit_vec[1]);
 }
 
 void CommonCalcPolaranglesForceKernel::copyParametersToContext(OpenMM::ContextImpl& context, const PolaranglesForce& force) {

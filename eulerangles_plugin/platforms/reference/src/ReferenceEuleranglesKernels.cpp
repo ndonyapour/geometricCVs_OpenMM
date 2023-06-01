@@ -130,7 +130,7 @@ void calculateDeriv(std::vector<double> q, std::string angle, std::vector<double
         deriv_const[3] =  2 * radian_to_degree * (q1 * deriv_x - 2 * q4 * deriv_y); // dE/dq4
     }
     else
-         throw OpenMMException("updateParametersInContext: The angle type is not defined");
+         throw OpenMMException("updateParametersInContext: The angle type is not correct");
     
 }
 
@@ -188,7 +188,7 @@ double ReferenceCalcEuleranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
         // center current posittions 
         Vec3 fit_cog = calculateCOG(fit_pos);
         centered_pos = translateCoordinates(pos, fit_cog);
-        fit_centered_refpos = translateCoordinates(fit_pos, fit_cog);
+        fit_centered_pos = translateCoordinates(fit_pos, fit_cog);
 
         // You need to request gradients first
         fit_qrot.request_group1_gradients(fit_pos.size());

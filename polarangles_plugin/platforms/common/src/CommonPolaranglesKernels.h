@@ -112,8 +112,8 @@ private:
     int blockSize, qidx;
     double sumNormRef;
     OpenMM::ComputeArray referencePos, particles, buffer, fit_referencePos, fit_particles, fit_buffer, fit_poscenter; 
-    OpenMM::ComputeArray eigval, eigvec, poscenter, qrot, qrot_deriv, anglederiv;
-    OpenMM::ComputeKernel kernel1, kernel2, kernel3;
+    OpenMM::ComputeArray eigval, eigvec, poscenter, qrot, qrot_deriv, anglederiv, center_buffer;
+    OpenMM::ComputeKernel kernel1, kernel2, kernel3, kernel4;
     CommonPolaranglesForceInfo* info;
     std::string angle;
     bool enable_fitting=false;

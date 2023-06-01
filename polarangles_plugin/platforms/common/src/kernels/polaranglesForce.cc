@@ -30,8 +30,42 @@ DEVICE real reduceValue(real value, LOCAL_ARG volatile real* temp) {
 }
 
 /**
+* calculate COG 
+*/
+KERNEL void computecCOG(int numParticles, GLOBAL const real4* RESTRICT posq, GLOBAL const int* RESTRICT particles, 
+                        const GLOBAL real* poscenter, const GLOBAL real* qrot, GLOBAL real* centr_buffer) {
+    
+    LOCAL volatile real temp[THREAD_BLOCK_SIZE];
+    // Compute the center of the particle positions.
+    real3 center =  make_real3(poscenter[0], poscenter[1], poscenter[2]);
+    real q0 = qrot[0];
+    real3 vq = make_real3(qrot[1], qrot[2], qrot[3]);
+    real3 rotcenter = make_real3(0, 0, 0); 
+ 
+    for (int i = LOCAL_ID; i < numParticles; i += LOCAL_SIZE){
+        real3 pos = trimTo3(posq[particles[i]]) - center;
+        // rotate 
+        real3 a, b;
+        a = cross(pos, vq) + q0 * pos;        
+        b = cross(a, vq);
+        pos = b + b + pos;
+        rotcenter += pos;
+        
+    }
+    rotcenter.x = reduceValue(rotcenter.x, temp)/numParticles;
+    rotcenter.y = reduceValue(rotcenter.y, temp)/numParticles;
+    rotcenter.z = reduceValue(rotcenter.z, temp)/numParticles;
+    if (LOCAL_ID == 0) {
+        centr_buffer[0] = rotcenter.x;
+        centr_buffer[1] = rotcenter.y;
+        centr_buffer[2] = rotcenter.z;
+    }
+}
+
+
+/**
  * Perform the first step of computing the Polarangles.  This is executed as a single work group.
- */
+*/
 KERNEL void computePolaranglesPart1(int numParticles, bool usecenter, bool rotate, GLOBAL const real4* RESTRICT posq, GLOBAL const real4* RESTRICT referencePos,
         GLOBAL const int* RESTRICT particles, const GLOBAL real* poscenter, const GLOBAL real* qrot, GLOBAL real* buffer) {
     LOCAL volatile real temp[THREAD_BLOCK_SIZE];
