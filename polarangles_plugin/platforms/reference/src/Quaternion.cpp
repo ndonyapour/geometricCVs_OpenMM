@@ -98,8 +98,11 @@ void Quaternion::request_group2_gradients(unsigned n){
     dQ0_2.resize(n, vector<Vec3>(4));
     pos2_gradients = true;
 }
+/*
+* The code is adapted from COLVARS 
+* https://github.com/Colvars/colvars/blob/b31b20b74b9a0c2297774d6a805d8720f954e541/src/colvartypes.cpp#L371
+*/ 
 
-// From NAMD
 void Quaternion::calc_optimal_rotation(const std::vector<OpenMM::Vec3> pos1, const std::vector<OpenMM::Vec3> pos2, const std::vector<double> normquat){
 
     q.assign(4, 0);
