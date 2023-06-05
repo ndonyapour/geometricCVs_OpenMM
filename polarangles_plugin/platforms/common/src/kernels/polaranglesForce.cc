@@ -146,7 +146,7 @@ KERNEL void computePolaranglesForces(int numParticles, int paddedNumAtoms, GLOBA
     for (int i = GLOBAL_ID; i < numParticles; i += GLOBAL_SIZE) {
         int index = particles[i];
         real3 dvec[4];
-        duvec[0] = make_real3(0, 0, 0); duvec[1] = make_real3(0, 0, 0); duvec[2] = make_real3(0, 0, 0); 
+        dvec[0] = make_real3(0, 0, 0); dvec[1] = make_real3(0, 0, 0); dvec[2] = make_real3(0, 0, 0); 
         for (int p=0; p<3; p++){
             real3 mderiv = trimTo3(derive_matrix[p]);
             real3 a, b;
