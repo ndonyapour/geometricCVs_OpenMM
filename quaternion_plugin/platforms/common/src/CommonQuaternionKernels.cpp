@@ -46,7 +46,7 @@ using namespace std;
 void CommonCalcQuaternionForceKernel::initialize(const System& system, const QuaternionForce& force) {
     qidx = force.getQidx();
     // Create data structures.
-    
+
     ContextSelector selector(cc);
     bool useDouble = cc.getUseDoublePrecision();
     int elementSize = (useDouble ? sizeof(double) : sizeof(float));
@@ -58,11 +58,9 @@ void CommonCalcQuaternionForceKernel::initialize(const System& system, const Qua
     buffer.initialize(cc, 9, elementSize, "buffer");
     eigval.initialize(cc, 4, elementSize, "eigval");
     eigvec.initialize(cc, 4, 4*elementSize, "eigvec");
-    poscenter.initialize(cc, 3, elementSize, "poscenter");
     recordParameters(force);
     info = new CommonQuaternionForceInfo(force);
     cc.addForce(info);
-    
     // Create the kernels.
     // importnat variable
     blockSize = min(256, cc.getMaxThreadBlockSize());
@@ -82,7 +80,6 @@ void CommonCalcQuaternionForceKernel::initialize(const System& system, const Qua
     kernel2->addArg(cc.getPosq());
     kernel2->addArg(referencePos);
     kernel2->addArg(particles);
-    kernel2->addArg(poscenter);
     kernel2->addArg(eigval);
     kernel2->addArg(eigvec);
     kernel2->addArg(cc.getLongForceBuffer());
@@ -90,7 +87,7 @@ void CommonCalcQuaternionForceKernel::initialize(const System& system, const Qua
 
 void CommonCalcQuaternionForceKernel::recordParameters(const QuaternionForce& force) {
     // Record the parameters and center the reference positions.
-    
+
     vector<int> particleVec = force.getParticles();
     if (particleVec.size() == 0)
         for (int i = 0; i < cc.getNumAtoms(); i++)
@@ -104,7 +101,6 @@ void CommonCalcQuaternionForceKernel::recordParameters(const QuaternionForce& fo
         p -= center;
 
     // Upload them to the device.
-
     particles.upload(particleVec);
     vector<mm_double4> pos;
     for (Vec3 p : centeredPositions)
@@ -134,10 +130,10 @@ double CommonCalcQuaternionForceKernel::executeImpl(OpenMM::ContextImpl& context
     int numParticles = particles.getSize();
     kernel1->setArg(0, numParticles);
     kernel1->execute(blockSize, blockSize);
-    
+
     // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
     // and eigenvector.
-    
+
     vector<REAL> C;
     buffer.download(C);
 
@@ -171,17 +167,17 @@ double CommonCalcQuaternionForceKernel::executeImpl(OpenMM::ContextImpl& context
     eigen.getRealEigenvalues(S_eigval);
     eigen.getV(S_eigvec);
     double dot;
-    std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0}; 
-    
-    // transpose 
-    Array2D<double> temp = Array2D<double>(4, 4); 
+    std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0};
+
+    // transpose
+    Array2D<double> temp = Array2D<double>(4, 4);
     for (int i=0;i<4;i++) {
-        for (int j=0;j<4;j++) 
+        for (int j=0;j<4;j++)
                 temp[j][i] = S_eigvec[i][j];
     }
-    
+
     S_eigvec = temp;
-    
+
    // Normalise each eigenvector in the direction closer to norm
     for (int i=0;i<4;i++) {
         dot=0.0;
@@ -192,28 +188,21 @@ double CommonCalcQuaternionForceKernel::executeImpl(OpenMM::ContextImpl& context
             for (int j=0;j<4;j++)
                 S_eigvec[i][j] = -S_eigvec[i][j];
     }
-    
-    // inverse eigen vectrs 
+
+    // inverse eigen vectrs
     // inverse for quaternion inv(q) = (q0, -q1, -q, -q3)
     for (int i=0;i<4;i++) {
-        for (int j=1;j<4;j++) 
+        for (int j=1;j<4;j++)
             S_eigvec[i][j] = -S_eigvec[i][j];
     }
-    // std::cout << "****************\n";
-    // for (int i=0;i<4;i++) {
-    //         std::cout<<S_eigval[i] << "\t \t" <<S_eigvec[i][0] << "\t" << S_eigvec[i][1]<<"\t" << S_eigvec[i][2] << "\t" <<S_eigvec[i][3] << "\n";
-    //     }
-    
-    //std::cout<<qidx<<"\t"<<S_eigvec[0][qidx]<<"\n";
-    vector<REAL> center = {static_cast<REAL>(C[10]), static_cast<REAL>(C[11]), static_cast<REAL>(C[11])}; 
-    vector<REAL> eigval_buffer = {static_cast<REAL>(S_eigval[0]), static_cast<REAL>(S_eigval[1]), 
-                                  static_cast<REAL>(S_eigval[2]), static_cast<REAL>(S_eigval[3])}; 
+
+    vector<REAL> eigval_buffer = {static_cast<REAL>(S_eigval[0]), static_cast<REAL>(S_eigval[1]),
+                                  static_cast<REAL>(S_eigval[2]), static_cast<REAL>(S_eigval[3])};
     vector<mm_double4> eigvec_buffer;
-    
-    for (int i=0;i<4;i++) 
+
+    for (int i=0;i<4;i++)
         eigvec_buffer.push_back(mm_double4(S_eigvec[i][0], S_eigvec[i][1], S_eigvec[i][2], S_eigvec[i][3]));
-    
-    poscenter.upload(center);
+
     // if true, automatic conversions between single and double
     //                  precision will be performed as necessary
     eigval.upload(eigval_buffer);
@@ -234,9 +223,9 @@ void CommonCalcQuaternionForceKernel::copyParametersToContext(OpenMM::ContextImp
     if (numParticles != particles.getSize())
         particles.resize(numParticles);
     recordParameters(force);
-    
+
     // Mark that the current reordering may be invalid.
-    
+
    info->updateParticles();
    cc.invalidateMolecules(info);
 }

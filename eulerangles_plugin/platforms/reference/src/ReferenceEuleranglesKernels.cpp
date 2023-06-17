@@ -61,7 +61,7 @@ double asinDerivative(double x) {
 void atan2Derivatives(double x, double y, double& dAtan2_dx, double& dAtan2_dy) {
     double atan2_xy = std::atan2(x, y);
     double denominator = x * x + y * y;
-    
+
     // Derivative with respect to x: d(atan2(x, y))/dx = y / (x^2 + y^2)
     dAtan2_dx = y / denominator;
 
@@ -104,14 +104,14 @@ void calculateDeriv(std::vector<double> q, std::string angle, std::vector<double
         double x = 2 * (q1 * q3 - q4 * q2);
         energy = radian_to_degree * asin(x);
         double deriv = 2 * radian_to_degree * asinDerivative(x);
-        deriv_const[0] = deriv * q3; 
+        deriv_const[0] = deriv * q3;
         deriv_const[1] = -deriv * q4;
         deriv_const[2] = deriv * q1;
         deriv_const[3] = -deriv * q2;
-    } 
+    }
     else if (angle == "Phi"){
         double x = 2*(q1*q2+q3*q4), y = 1-2*(q2*q2+q3*q3);
-        energy = radian_to_degree * atan2(x, y);  
+        energy = radian_to_degree * atan2(x, y);
         double deriv_x, deriv_y;
         atan2Derivatives(x, y, deriv_x, deriv_y);
         deriv_const[0] = 2 * radian_to_degree * q2 * deriv_x;  // dE/dq1
@@ -121,7 +121,7 @@ void calculateDeriv(std::vector<double> q, std::string angle, std::vector<double
     }
     else if (angle == "Psi"){
         double x = 2*(q1*q4+q2*q3), y = 1-2*(q3*q3+q4*q4);
-        energy = radian_to_degree * atan2(x, y); 
+        energy = radian_to_degree * atan2(x, y);
         double deriv_x, deriv_y;
         atan2Derivatives(x, y, deriv_x, deriv_y);
         deriv_const[0] = 2 * radian_to_degree * q4 * deriv_x;  // dE/dq1
@@ -131,7 +131,7 @@ void calculateDeriv(std::vector<double> q, std::string angle, std::vector<double
     }
     else
          throw OpenMMException("updateParametersInContext: The angle type is not correct");
-    
+
 }
 
 void ReferenceCalcEuleranglesForceKernel::initialize(const System& system, const EuleranglesForce& force) {
@@ -141,7 +141,7 @@ void ReferenceCalcEuleranglesForceKernel::initialize(const System& system, const
     if (particles.size() == 0)
         for (int i = 0; i < system.getNumParticles(); i++)
             particles.push_back(i);
-            
+
     if (fitting_particles.size() != 0)
         enable_fitting = true;
 
@@ -152,7 +152,7 @@ double ReferenceCalcEuleranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
     // Compute the Quaternion and its gradient using the algorithm described in Coutsias et al,
     // "Using Quaternion to calculate Quaternion" (doi: 10.1002/jcc.20110).  First subtract
     // the centroid from the atom positions.  The reference positions have already been centered.
-    std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0}; 
+    std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0};
     Quaternion qrot, fit_qrot;;
     if (!enable_fitting) {
         std::vector<Vec3> refpos, pos, centered_refpos, centered_pos;
@@ -161,22 +161,22 @@ double ReferenceCalcEuleranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
             pos.push_back(atomCoordinates[i]);
         }
 
-        // centering 
+        // centering
         centered_refpos = shiftbyCOG(refpos);
         centered_pos = shiftbyCOG(pos);
 
-        // calculating q 
+        // calculating q
         qrot.request_group2_gradients(pos.size());
-        qrot.calc_optimal_rotation(centered_refpos, centered_pos, normquat); 
+        qrot.calc_optimal_rotation(centered_refpos, centered_pos, normquat);
     }
     else {
-        
-        std::vector<Vec3> refpos, pos, fit_refpos, fit_pos, centered_refpos, centered_pos, fit_centered_refpos, fit_centered_pos; 
+
+        std::vector<Vec3> refpos, pos, fit_refpos, fit_pos, centered_refpos, centered_pos, fit_centered_refpos, fit_centered_pos;
         for (int i : particles ){
             refpos.push_back(referencePos[i]);
             pos.push_back(atomCoordinates[i]);
-        } 
-        
+        }
+
         for (int i : fitting_particles){
             fit_refpos.push_back(referencePos[i]);
             fit_pos.push_back(atomCoordinates[i]);
@@ -184,8 +184,8 @@ double ReferenceCalcEuleranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
         // center reference pos
         centered_refpos = shiftbyCOG(refpos);
         fit_centered_refpos = shiftbyCOG(fit_refpos);
-       
-        // center current posittions 
+
+        // center current posittions
         Vec3 fit_cog = calculateCOG(fit_pos);
         centered_pos = translateCoordinates(pos, fit_cog);
         fit_centered_pos = translateCoordinates(fit_pos, fit_cog);
@@ -202,32 +202,32 @@ double ReferenceCalcEuleranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
         // main rotation
         qrot.request_group2_gradients(pos.size());
         qrot.calc_optimal_rotation(centered_refpos, rot_pos, normquat);
-        
+
     }
-    // calcualte derivatives 
+    // calcualte derivatives
     double energy;
     vector<double> deriv_const(4);
     calculateDeriv(qrot.q, angle, deriv_const, energy);
-    
+
     if (!enable_fitting){
-       // not alignment done 
+       // not alignment done
         int numParticles = particles.size();
-        for (int i = 0; i < numParticles; i++) 
+        for (int i = 0; i < numParticles; i++)
             for (int qidx = 0; qidx < 4; qidx++ )
-                forces[particles[i]] += qrot.dQ0_2[i][qidx] * deriv_const[qidx]/numParticles;
+                forces[particles[i]] += -qrot.dQ0_2[i][qidx] * deriv_const[qidx]/numParticles;
     }
     else{
         int numParticles = particles.size();
         for (int i = 0; i < numParticles; i++) {
             for (int qidx = 0; qidx < 4; qidx++ ) {
                 Vec3 deriv = qrot.quaternionRotate(qrot.quaternionInvert(fit_qrot.q), qrot.dQ0_2[i][qidx]);
-                forces[particles[i]] += -deriv * deriv_const[qidx]/numParticles;   
-                
-            } 
+                forces[particles[i]] += -deriv * deriv_const[qidx]/numParticles;
+
+            }
         }
-      
+
     }
-        
+
     return energy;
 }
 

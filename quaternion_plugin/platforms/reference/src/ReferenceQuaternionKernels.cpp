@@ -101,27 +101,22 @@ double ReferenceCalcQuaternionForceKernel::calculateIxn(vector<OpenMM::Vec3>& at
         refpos.push_back(referencePos[i]);
         pos.push_back(atomCoordinates[i]);
     }
-    
-    // centering 
+
+    // centering
     centered_refpos = shiftbyCOG(refpos);
     centered_pos = shiftbyCOG(pos);
-    
-    // calculating q 
+
+    // calculating q
     Quaternion qrot;
-    std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0}; 
+    std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0};
     qrot.request_group2_gradients(pos.size());
     qrot.calc_optimal_rotation(centered_refpos, centered_pos, normquat);
-    
-    // calculate forces 
+
+    // calculate forces
     int numParticles = particles.size();
-    for (int i = 0; i < numParticles; i++) 
-        forces[particles[i]] += qrot.dQ0_2[i][qidx] * 1/numParticles; 
-    
-     
-    // if (qidx == 0) {
-    //     std::cout << "*****************" <<qidx << "\n";  
-    //     std::cout<< qrot.q[0] << "  " << qrot.q[1] <<"  " << qrot.q[2]<<"  " << qrot.q[3] << "\n";}
-        
+    for (int i = 0; i < numParticles; i++)
+        forces[particles[i]] -= qrot.dQ0_2[i][qidx] * 1/numParticles;
+
     return qrot.q[qidx];
 }
 

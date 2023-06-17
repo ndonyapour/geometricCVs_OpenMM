@@ -68,17 +68,17 @@ void calculateQRotation(std::vector<REAL> C, vector<mm_double4>& eigvec_buffer, 
     eigen.getRealEigenvalues(S_eigval);
     eigen.getV(S_eigvec);
     double dot;
-    std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0}; 
-    
-    // transpose 
-    Array2D<double> temp = Array2D<double>(4, 4); 
+    std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0};
+
+    // transpose
+    Array2D<double> temp = Array2D<double>(4, 4);
     for (int i=0;i<4;i++) {
-        for (int j=0;j<4;j++) 
+        for (int j=0;j<4;j++)
                 temp[j][i] = S_eigvec[i][j];
     }
-    
+
     S_eigvec = temp;
-    
+
    // Normalise each eigenvector in the direction closer to norm
     for (int i = 0; i<4; i++) {
         dot=0.0;
@@ -89,20 +89,20 @@ void calculateQRotation(std::vector<REAL> C, vector<mm_double4>& eigvec_buffer, 
             for (int j=0; j<4; j++)
                 S_eigvec[i][j] = -S_eigvec[i][j];
     }
-    
-    // inverse eigen vectrs 
+
+    // inverse eigen vectrs
     // inverse for eulerangles inv(q) = (q0, -q1, -q, -q3)
     for (int i=0;i<4;i++) {
-        for (int j=1;j<4;j++) 
+        for (int j=1;j<4;j++)
             S_eigvec[i][j] = -S_eigvec[i][j];
     }
     // set q
     for (int i=0; i<4; i++)
-        q.push_back(S_eigvec[0][i]); 
-    eigval_buffer = {static_cast<REAL>(S_eigval[0]), static_cast<REAL>(S_eigval[1]), 
-                                static_cast<REAL>(S_eigval[2]), static_cast<REAL>(S_eigval[3])};                         
-    
-    for (int i=0;i<4;i++) 
+        q.push_back(S_eigvec[0][i]);
+    eigval_buffer = {static_cast<REAL>(S_eigval[0]), static_cast<REAL>(S_eigval[1]),
+                                static_cast<REAL>(S_eigval[2]), static_cast<REAL>(S_eigval[3])};
+
+    for (int i=0;i<4;i++)
         eigvec_buffer.push_back(mm_double4(S_eigvec[i][0], S_eigvec[i][1], S_eigvec[i][2], S_eigvec[i][3]));
 }
 
@@ -113,7 +113,7 @@ double asinDerivative(double x) {
 void atan2Derivatives(double x, double y, double& dAtan2_dx, double& dAtan2_dy) {
     double atan2_xy = std::atan2(x, y);
     double denominator = x * x + y * y;
-    
+
     // Derivative with respect to x: d(atan2(x, y))/dx = y / (x^2 + y^2)
     dAtan2_dx = y / denominator;
 
@@ -123,7 +123,7 @@ void atan2Derivatives(double x, double y, double& dAtan2_dx, double& dAtan2_dy) 
 
 template <class REAL>
 void calculateDeriv(std::vector<double> q, std::string angle, vector<REAL>& anglederiv_buffer, double& energy){
-    double radian_to_degree = 180 / 3.1415926;
+    double radian_to_degree = 57.2958; //180 / 3.1415926;
     double q1 = q[0], q2 = q[1], q3 = q[2], q4 = q[3];
     if (angle == "Theta") {
         double x = 2 * (q1 * q3 - q4 * q2);
@@ -133,11 +133,11 @@ void calculateDeriv(std::vector<double> q, std::string angle, vector<REAL>& angl
         anglederiv_buffer[1] = static_cast<REAL>(-deriv * q4);
         anglederiv_buffer[2] = static_cast<REAL>(deriv * q1);
         anglederiv_buffer[3] = static_cast<REAL>(-deriv * q2);
-        
-    } 
+
+    }
     else if (angle == "Phi"){
         double x = 2*(q1*q2+q3*q4), y = 1-2*(q2*q2+q3*q3);
-        energy = radian_to_degree * atan2(x, y);  
+        energy = radian_to_degree * atan2(x, y);
         double deriv_x, deriv_y;
         atan2Derivatives(x, y, deriv_x, deriv_y);
         anglederiv_buffer[0] = static_cast<REAL>(2 * radian_to_degree * q2 * deriv_x);  // dE/dq1
@@ -147,7 +147,7 @@ void calculateDeriv(std::vector<double> q, std::string angle, vector<REAL>& angl
     }
     else if (angle == "Psi"){
         double x = 2*(q1*q4+q2*q3), y = 1-2*(q3*q3+q4*q4);
-        energy = radian_to_degree * atan2(x, y); 
+        energy = radian_to_degree * atan2(x, y);
         double deriv_x, deriv_y;
         atan2Derivatives(x, y, deriv_x, deriv_y);
         anglederiv_buffer[0] = static_cast<REAL>(2 * radian_to_degree * q4 * deriv_x);  // dE/dq1
@@ -166,7 +166,7 @@ void CommonCalcEuleranglesForceKernel::initialize(const System& system, const Eu
     angle = force.get_Angle();
     if (numParticles == 0)
         numParticles = system.getNumParticles();
-        
+
     int fit_numParticles = force.getFittingParticles().size();
     if (fit_numParticles != 0) {
         enable_fitting = true;
@@ -174,7 +174,7 @@ void CommonCalcEuleranglesForceKernel::initialize(const System& system, const Eu
         fit_particles.initialize<int>(cc, fit_numParticles, "particles");
         fit_buffer.initialize(cc, 12, elementSize, "buffer");
     }
-        
+
     referencePos.initialize(cc, system.getNumParticles(), 4*elementSize, "referencePos");
     particles.initialize<int>(cc, numParticles, "particles");
     buffer.initialize(cc, 12, elementSize, "buffer");
@@ -184,12 +184,12 @@ void CommonCalcEuleranglesForceKernel::initialize(const System& system, const Eu
     qrot.initialize(cc, 4, elementSize, "qrot");
     qrot_deriv.initialize(cc, 4, elementSize, "qrot_dev");
     anglederiv.initialize(cc, 4, elementSize, "anglederiv");
-    
-    
+
+
     recordParameters(force);
     info = new CommonEuleranglesForceInfo(force);
     cc.addForce(info);
-   
+
     // Create the kernels.
     // importnat variable
     blockSize = min(256, cc.getMaxThreadBlockSize());
@@ -218,7 +218,7 @@ void CommonCalcEuleranglesForceKernel::initialize(const System& system, const Eu
     kernel2->addArg(anglederiv);
     kernel2->addArg(qrot_deriv);
     kernel2->addArg(cc.getLongForceBuffer());
-    // for fitting group 
+    // for fitting group
     if (enable_fitting != 0) {
         //fit_poscenter.initialize(cc, 3, elementSize, "poscenter");
         kernel3 = program->createKernel("computeEuleranglesPart1");
@@ -230,14 +230,14 @@ void CommonCalcEuleranglesForceKernel::initialize(const System& system, const Eu
         kernel3->addArg(fit_particles);
         kernel3->addArg(poscenter);
         kernel3->addArg(qrot);
-        kernel3->addArg(fit_buffer);  
-    }  
-   
+        kernel3->addArg(fit_buffer);
+    }
+
 }
 
 void CommonCalcEuleranglesForceKernel::recordParameters(const EuleranglesForce& force) {
     // Record the parameters and center the reference positions.
-    
+
     vector<int> particleVec = force.getParticles();
     if (particleVec.size() == 0)
         for (int i = 0; i < cc.getNumAtoms(); i++)
@@ -258,7 +258,7 @@ void CommonCalcEuleranglesForceKernel::recordParameters(const EuleranglesForce& 
         pos.push_back(mm_double4(p[0], p[1], p[2], 0));
     referencePos.upload(pos, true);
 
-   // fit_particles 
+   // fit_particles
    if (enable_fitting){
         particleVec = force.getFittingParticles();
         centeredPositions = force.getReferencePositions();
@@ -275,7 +275,7 @@ void CommonCalcEuleranglesForceKernel::recordParameters(const EuleranglesForce& 
         for (Vec3 p : centeredPositions)
             pos.push_back(mm_double4(p[0], p[1], p[2], 0));
         fit_referencePos.upload(pos, true);
-    
+
    }
 }
 
@@ -295,7 +295,7 @@ double CommonCalcEuleranglesForceKernel::executeImpl(OpenMM::ContextImpl& contex
         kernel1->setArg(0, numParticles);
         kernel1->setArg(1, false);
         kernel1->setArg(2, false);
-        kernel1->execute(blockSize, blockSize);
+        kernel1->execute(1); //blockSize, blockSize);
         // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
         // and eigenvector.
         vector<REAL> C;
@@ -310,54 +310,54 @@ double CommonCalcEuleranglesForceKernel::executeImpl(OpenMM::ContextImpl& contex
         vector<mm_double4> eigvec_buffer;
         vector<double> q;
         calculateQRotation(C, eigvec_buffer, eigval_buffer, q);
-    
+
         calculateDeriv(q, angle, anglederiv_buffer, energy);
-   
-        // upload data to calculate forces 
+
+        // upload data to calculate forces
         eigval.upload(eigval_buffer);
         eigvec.upload(eigvec_buffer, true);
         anglederiv.upload(anglederiv_buffer);
         kernel2->setArg(0, numParticles);
         kernel2->setArg(1, false);
-        kernel2->execute(numParticles);
+        kernel2->execute(1); //numParticles);
     }
     else{
         //center the current positions using the center of fitting group atoms
         int fit_numParticles = fit_particles.getSize();
         kernel3->setArg(0, fit_numParticles);
-        kernel3->setArg(1, false); 
+        kernel3->setArg(1, false);
         kernel3->setArg(2, false);
         kernel3->execute(blockSize, blockSize);
         // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
         // and eigenvector.
-        vector<REAL> fit_C; 
+        vector<REAL> fit_C;
         fit_buffer.download(fit_C);
         // JAMA::Eigenvalue may run into an infinite loop if we have any NaN
         for (int i = 0; i < 9; i++) {
             if (fit_C[i] != fit_C[i])
                 throw OpenMMException("NaN encountered during Eulerangles force calculation");
         }
-        // compute optimal rotation 
-        //vector<REAL> fit_center = {static_cast<REAL>(fit_C[10]), static_cast<REAL>(fit_C[11]), static_cast<REAL>(fit_C[12])}; 
+        // compute optimal rotation
+        //vector<REAL> fit_center = {static_cast<REAL>(fit_C[10]), static_cast<REAL>(fit_C[11]), static_cast<REAL>(fit_C[12])};
         vector<REAL> fit_center = {fit_C[9], fit_C[10], fit_C[11]};
-        //cout<< fit_center[0] << "\t" << fit_center[1]<< "\t" << fit_center[2] << "\n"; 
+        //cout<< fit_center[0] << "\t" << fit_center[1]<< "\t" << fit_center[2] << "\n";
         vector<REAL> fit_eigval_buffer, anglederiv_buffer(4);
         vector<mm_double4> fit_eigvec_buffer;
         vector<double> fit_q;
-        calculateQRotation(fit_C, fit_eigvec_buffer, fit_eigval_buffer, fit_q);  
+        calculateQRotation(fit_C, fit_eigvec_buffer, fit_eigval_buffer, fit_q);
         //calculateDeriv(fit_q, angle, anglederiv_buffer, energy);
-         
+
         // center, apply fit rotation and calculate optimal rotation between particles and its reference
         // center particles using the cog of fitting group atoms
-        
-        vector<REAL> qrot_buffer = {static_cast<REAL>(fit_q[0]), static_cast<REAL>(fit_q[1]), 
+
+        vector<REAL> qrot_buffer = {static_cast<REAL>(fit_q[0]), static_cast<REAL>(fit_q[1]),
                                     static_cast<REAL>(fit_q[2]), static_cast<REAL>(fit_q[3])};
         int numParticles = particles.getSize();
         poscenter.upload(fit_center);
         qrot.upload(qrot_buffer);
         kernel1->setArg(0, numParticles);
-        kernel1->setArg(1, true); // uses the given center for recentering 
-        kernel1->setArg(2, true); // rotates using the fit_q rotation 
+        kernel1->setArg(1, true); // uses the given center for recentering
+        kernel1->setArg(2, true); // rotates using the fit_q rotation
         kernel1->execute(blockSize, blockSize);
         // Download the Correlation matrix, build the S matrix, and find the maximum eigenvalue
         // and eigenvector.
@@ -375,17 +375,20 @@ double CommonCalcEuleranglesForceKernel::executeImpl(OpenMM::ContextImpl& contex
         calculateQRotation(C, eigvec_buffer, eigval_buffer, q);
         //cout<< q[0] << "\t" << q[1] << "\t" << q[2] <<"\t"<< q[3] << "\n";
         calculateDeriv(q, angle, anglederiv_buffer, energy);
-        
-        vector<REAL> inv_qrot_buffer = {static_cast<REAL>(fit_q[0]), -static_cast<REAL>(fit_q[1]), 
+
+        // for (int i=0; i<4; i++)
+        //     cout<< i <<"\t" << anglederiv_buffer[i] << "\n";
+
+        vector<REAL> inv_qrot_buffer = {static_cast<REAL>(fit_q[0]), -static_cast<REAL>(fit_q[1]),
                                     -static_cast<REAL>(fit_q[2]), -static_cast<REAL>(fit_q[3])};
-        // // compute forces forces 
+        // // compute forces forces
         eigval.upload(eigval_buffer);
         eigvec.upload(eigvec_buffer, true);
         qrot_deriv.upload(inv_qrot_buffer);
         anglederiv.upload(anglederiv_buffer);
         kernel2->setArg(0, numParticles);
-        kernel2->setArg(1, true); // apply fitting rotation 
-        kernel2->execute(numParticles);              
+        kernel2->setArg(1, true); // apply fitting rotation
+        kernel2->execute(numParticles);
     }
     return energy;
 }
@@ -400,9 +403,9 @@ void CommonCalcEuleranglesForceKernel::copyParametersToContext(OpenMM::ContextIm
     if (numParticles != particles.getSize())
         particles.resize(numParticles);
     recordParameters(force);
-    
+
     // Mark that the current reordering may be invalid.
-    
+
    info->updateParticles();
    cc.invalidateMolecules(info);
 }
