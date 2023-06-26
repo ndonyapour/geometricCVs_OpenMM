@@ -71,7 +71,7 @@ public:
             CalcEuleranglesForceKernel(name, platform), hasInitializedKernel(false), cc(cc), system(system) {
     }
 
-    
+
  /**
      * Initialize the kernel.
      *
@@ -104,19 +104,22 @@ public:
      * @param context    the context to copy parameters to
      * @param force      the EuleranglesForce to copy the parameters from
      */
-    void copyParametersToContext(OpenMM::ContextImpl& context, const EuleranglesForce& force);    
+    void copyParametersToContext(OpenMM::ContextImpl& context, const EuleranglesForce& force);
 private:
     bool hasInitializedKernel;
     OpenMM::ComputeContext& cc;
     const OpenMM::System& system;
     int blockSize, qidx;
     double sumNormRef;
-    OpenMM::ComputeArray referencePos, particles, buffer, fit_referencePos, fit_particles, fit_buffer, fit_poscenter; 
-    OpenMM::ComputeArray eigval, eigvec, poscenter, qrot, qrot_deriv, anglederiv;
-    OpenMM::ComputeKernel kernel1, kernel2, kernel3;
+    OpenMM::ComputeArray referencePos, particles, buffer, fit_referencePos, fit_particles, fit_buffer, fit_poscenter;
+    OpenMM::ComputeArray eigval, eigvec, poscenter, qrot, qrot_deriv, anglederiv, forces;
+    OpenMM::ComputeKernel kernel1, kernel2, kernel3, kernel4;
     CommonEuleranglesForceInfo* info;
     std::string angle;
-    bool enable_fitting=false;
+    bool enable_fitting=false, enable_cpu=false;
+    vector<Vec3> centeredPositions, fit_centeredPositions;
+    vector<int> particleVec, fit_particleVec;
+
 
 };
 
