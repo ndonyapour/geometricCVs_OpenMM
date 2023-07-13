@@ -30,27 +30,27 @@ DEVICE real reduceValue(real value, LOCAL_ARG volatile real* temp) {
 }
 
 /**
-* calculate COG 
+* calculate COG
 */
-KERNEL void computecCOG(int numParticles, GLOBAL const real4* RESTRICT posq, GLOBAL const int* RESTRICT particles, 
+KERNEL void computecCOG(int numParticles, GLOBAL const real4* RESTRICT posq, GLOBAL const int* RESTRICT particles,
                         const GLOBAL real* poscenter, const GLOBAL real* qrot, GLOBAL real* centr_buffer) {
-    
+
     LOCAL volatile real temp[THREAD_BLOCK_SIZE];
     // Compute the center of the particle positions.
     real3 center =  make_real3(poscenter[0], poscenter[1], poscenter[2]);
     real q0 = qrot[0];
     real3 vq = make_real3(qrot[1], qrot[2], qrot[3]);
-    real3 rotcenter = make_real3(0, 0, 0); 
- 
+    real3 rotcenter = make_real3(0, 0, 0);
+
     for (int i = LOCAL_ID; i < numParticles; i += LOCAL_SIZE){
         real3 pos = trimTo3(posq[particles[i]]) - center;
-        // rotate 
+        // rotate
         real3 a, b;
-        a = cross(pos, vq) + q0 * pos;        
+        a = cross(pos, vq) + q0 * pos;
         b = cross(a, vq);
         pos = b + b + pos;
         rotcenter += pos;
-        
+
     }
     rotcenter.x = reduceValue(rotcenter.x, temp)/numParticles;
     rotcenter.y = reduceValue(rotcenter.y, temp)/numParticles;
@@ -71,7 +71,7 @@ KERNEL void computePolaranglesPart1(int numParticles, bool usecenter, bool rotat
     LOCAL volatile real temp[THREAD_BLOCK_SIZE];
 
     // Compute the center of the particle positions.
-    real3 center = make_real3(0, 0, 0); 
+    real3 center = make_real3(0, 0, 0);
     if (!usecenter) {
         for (int i = LOCAL_ID; i < numParticles; i += LOCAL_SIZE)
             center += trimTo3(posq[particles[i]]);
@@ -81,10 +81,10 @@ KERNEL void computePolaranglesPart1(int numParticles, bool usecenter, bool rotat
     }
     else
         center = make_real3(poscenter[0], poscenter[1], poscenter[2]);
-    
+
     //printf("Device %f \t %f \t %f\n", poscenter[0], poscenter[1], poscenter[2]);
     // Compute the correlation matrix.
-    
+
     real R[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
     real sum = 0;
     real q0 = qrot[0];
@@ -94,12 +94,12 @@ KERNEL void computePolaranglesPart1(int numParticles, bool usecenter, bool rotat
         real3 pos = trimTo3(posq[index]) - center;
         if (rotate) {
             real3 a, b;
-            a = cross(pos, vq) + q0 * pos;        
+            a = cross(pos, vq) + q0 * pos;
             b = cross(a, vq);
             pos = b + b + pos;
         }
-            // do q rotate 
-            
+            // do q rotate
+
         real3 refPos = trimTo3(referencePos[index]);
         R[0][0] += pos.x*refPos.x;
         R[0][1] += pos.x*refPos.y;
@@ -118,7 +118,7 @@ KERNEL void computePolaranglesPart1(int numParticles, bool usecenter, bool rotat
     sum = reduceValue(sum, temp);
 
     // Copy everything into the output buffer to send back to the host.
-    
+
     if (LOCAL_ID == 0) {
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++)
@@ -134,11 +134,11 @@ KERNEL void computePolaranglesPart1(int numParticles, bool usecenter, bool rotat
 /**
  * Apply forces based on the Polarangles.
  */
-KERNEL void computePolaranglesForces(int numParticles, int paddedNumAtoms, GLOBAL const int* RESTRICT particles, GLOBAL real4* derive_matrix, 
+KERNEL void computePolaranglesForces(int numParticles, int paddedNumAtoms, GLOBAL const int* RESTRICT particles, GLOBAL real4* derive_matrix,
         GLOBAL real* anglederiv, GLOBAL const real* RESTRICT qrot_deriv, GLOBAL mm_long* RESTRICT forceBuffers) {
     //real3 center = make_real3(poscenter[0], poscenter[1], poscenter[2]);
     real scale = 1 / (real) (numParticles);
- 
+
     //printf("***********************************\n");
     //printf("%d \t %d \t %d \t\n", GLOBAL_ID, GLOBAL_SIZE, numParticles);
     real q0 = qrot_deriv[0];
@@ -146,18 +146,18 @@ KERNEL void computePolaranglesForces(int numParticles, int paddedNumAtoms, GLOBA
     for (int i = GLOBAL_ID; i < numParticles; i += GLOBAL_SIZE) {
         int index = particles[i];
         real3 dvec[4];
-        dvec[0] = make_real3(0, 0, 0); dvec[1] = make_real3(0, 0, 0); dvec[2] = make_real3(0, 0, 0); 
+        dvec[0] = make_real3(0, 0, 0); dvec[1] = make_real3(0, 0, 0); dvec[2] = make_real3(0, 0, 0);
         for (int p=0; p<3; p++){
             real3 mderiv = trimTo3(derive_matrix[p]);
             real3 a, b;
             a = cross(mderiv, vq) + q0 * mderiv;
             b = cross(a, vq);
-            dvec[p] = b + b + mderiv; 
-            }          
-    
+            dvec[p] = b + b + mderiv;
+            }
+
         real3 force = make_real3(0, 0, 0);
         for(int i=0; i<3; i++)
-            force += -dvec[i] * anglederiv[i] * scale; 
+            force += -dvec[i] * anglederiv[i] * scale;
 
         forceBuffers[index] += (mm_long) (force.x*0x100000000);
         forceBuffers[index+paddedNumAtoms] += (mm_long) (force.y*0x100000000);

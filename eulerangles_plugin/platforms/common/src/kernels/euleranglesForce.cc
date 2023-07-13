@@ -29,6 +29,29 @@ DEVICE real reduceValue(real value, LOCAL_ARG volatile real* temp) {
     return temp[0];
 }
 
+KERNEL void computeCOG(int numParticles, GLOBAL const real4* RESTRICT posq, GLOBAL const int* RESTRICT particles, GLOBAL real* buffer) {
+    LOCAL volatile real temp[THREAD_BLOCK_SIZE];
+
+    // Compute the center of the particle positions.
+    real3 center = make_real3(0, 0, 0);
+
+    for (int i = LOCAL_ID; i < numParticles; i += LOCAL_SIZE)
+        center += trimTo3(posq[particles[i]]);
+
+    center.x = reduceValue(center.x, temp)/numParticles;
+    center.y = reduceValue(center.y, temp)/numParticles;
+    center.z = reduceValue(center.z, temp)/numParticles;
+    // Copy everything into the output buffer to send back to the host.
+
+    if (LOCAL_ID == 0) {
+        buffer[0] = center.x;
+        buffer[1] = center.y;
+        buffer[2] = center.z;
+    }
+}
+
+
+
 /**
  * Perform the first step of computing the Eulerangles.  This is executed as a single work group.
  */
@@ -36,9 +59,9 @@ KERNEL void computeEuleranglesPart1(int numParticles, bool usecenter, bool rotat
         GLOBAL const int* RESTRICT particles, const GLOBAL real* poscenter, const GLOBAL real* qrot, GLOBAL real* buffer) {
     LOCAL volatile real temp[THREAD_BLOCK_SIZE];
 
-    // Compute the center of the particle positions.
     real3 center = make_real3(0, 0, 0);
-    if (!usecenter) {
+    // Compute the center of the particle positions.
+       if (!usecenter) {
         for (int i = LOCAL_ID; i < numParticles; i += LOCAL_SIZE)
             center += trimTo3(posq[particles[i]]);
         center.x = reduceValue(center.x, temp)/numParticles;
@@ -52,7 +75,6 @@ KERNEL void computeEuleranglesPart1(int numParticles, bool usecenter, bool rotat
     // Compute the correlation matrix.
 
     real R[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
-    real sum = 0;
     real q0 = qrot[0];
     real3 vq = make_real3(qrot[1], qrot[2], qrot[3]);
     for (int i = LOCAL_ID; i < numParticles; i += LOCAL_SIZE) {
@@ -75,7 +97,7 @@ KERNEL void computeEuleranglesPart1(int numParticles, bool usecenter, bool rotat
         R[2][0] += pos.z*refPos.x;
         R[2][1] += pos.z*refPos.y;
         R[2][2] += pos.z*refPos.z;
-        sum += dot(pos, pos);
+        //sum += dot(pos, pos);
     }
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 3; j++)
@@ -115,7 +137,6 @@ KERNEL void computeEuleranglesForces(int numParticles, bool rotate, int paddedNu
     for (int i = GLOBAL_ID; i < numParticles; i += GLOBAL_SIZE) {
         real3 ds_2[4][4];
         int index = particles[i];
-        //real3 pos = trimTo3(posq[index]) - center;
         real3 refPos = trimTo3(referencePos[index]);
         real rx = refPos.x, ry = refPos.y, rz = refPos.z;
         ds_2[0][0] = make_real3(  rx,  ry,  rz);
@@ -140,9 +161,9 @@ KERNEL void computeEuleranglesForces(int numParticles, bool rotate, int paddedNu
         for (int p=0; p<4; p++){
             for (int i=0 ;i<4; i++) {
                 for (int j=0; j<4; j++) {
-                    dq0_2[p] += -1 * ((Q1[i] * ds_2[i][j] * Q0[j]) / (L0-L1) * Q1[p]
-                                    + (Q2[i] * ds_2[i][j] * Q0[j]) / (L0-L2) * Q2[p]
-                                    + (Q3[i] * ds_2[i][j] * Q0[j]) / (L0-L3) * Q3[p]);
+                    dq0_2[p] += ((Q1[i] * ds_2[i][j] * Q0[j]) / (L0-L1) * Q1[p]
+                                + (Q2[i] * ds_2[i][j] * Q0[j]) / (L0-L2) * Q2[p]
+                                + (Q3[i] * ds_2[i][j] * Q0[j]) / (L0-L3) * Q3[p]);
 
                 }
             }
@@ -162,9 +183,9 @@ KERNEL void computeEuleranglesForces(int numParticles, bool rotate, int paddedNu
         for(int i=0; i<4; i++)
             force += scale * anglederiv[i] * dq0_2[i];
 
-        forceBuffers[index] -= (mm_long) (force.x*0x100000000);
-        forceBuffers[index+paddedNumAtoms] -= (mm_long) (force.y*0x100000000);
-        forceBuffers[index+2*paddedNumAtoms] -= (mm_long) (force.z*0x100000000); //realToFixedPoint(force.z);
+        forceBuffers[index] += (mm_long) (force.x*0x100000000);
+        forceBuffers[index+paddedNumAtoms] += (mm_long) (force.y*0x100000000);
+        forceBuffers[index+2*paddedNumAtoms] += (mm_long) (force.z*0x100000000); //realToFixedPoint(force.z);
     }
 }
 

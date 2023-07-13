@@ -61,7 +61,7 @@ double asinDerivative(double x) {
 void atan2Derivatives(double x, double y, double& dAtan2_dx, double& dAtan2_dy) {
     double atan2_xy = std::atan2(x, y);
     double denominator = x * x + y * y;
-    
+
     // Derivative with respect to x: d(atan2(x, y))/dx = y / (x^2 + y^2)
     dAtan2_dx = y / denominator;
 
@@ -77,14 +77,14 @@ double acosDerivative(double x) {
     throw OpenMMException("updateParametersInContext: The angle values are NaN");
     return NAN;
   }
-  
+
   // Calculate the derivative of acos(x)
   return -1.0 / sqrt(1.0 - x*x);
 }
 
 // From OpenMM referenceForce
 double modulo(const Vec3& deltaR) {
-  
+
     return sqrt(DOT3(deltaR, deltaR));
 }
 
@@ -126,19 +126,19 @@ void calculateDeriv(Vec3 unit_vec, std::string angle, Vec3& deriv_const, double&
     if (angle == "Theta") {
         energy = radian_to_degree * acos(-i2);
         deriv_const[0] = 0.0;
-        deriv_const[1] = - acosDerivative(-i2);
+        deriv_const[1] = - radian_to_degree * acosDerivative(-i2);
         deriv_const[2] = 0.0;
-    } 
+    }
     else if (angle == "Phi"){
         energy = radian_to_degree * atan2(i3, i1);
         double deriv_x, deriv_y;
         atan2Derivatives(i3, i1, deriv_x, deriv_y);
-        deriv_const[0] = radian_to_degree * deriv_y; 
+        deriv_const[0] = radian_to_degree * deriv_y;
         deriv_const[1] = 0.0;
         deriv_const[2] = radian_to_degree * deriv_x;
     }
     else
-        throw OpenMMException("updateParametersInContext: The angle type is not correct");   
+        throw OpenMMException("updateParametersInContext: The angle type is not correct");
 }
 
 void ReferenceCalcPolaranglesForceKernel::initialize(const System& system, const PolaranglesForce& force) {
@@ -156,14 +156,14 @@ double ReferenceCalcPolaranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
     // Compute the Quaternion and its gradient using the algorithm described in Coutsias et al,
     // "Using Quaternion to calculate Quaternion" (doi: 10.1002/jcc.20110).  First subtract
     // the centroid from the atom positions.  The reference positions have already been centered.
-    std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0}; 
+    std::vector<double> normquat = {1.0, 0.0, 0.0, 0.0};
     Quaternion fit_qrot;
-    std::vector<Vec3> refpos, pos, fit_refpos, fit_pos, centered_refpos, centered_pos, fit_centered_refpos, fit_centered_pos; 
+    std::vector<Vec3> refpos, pos, fit_refpos, fit_pos, centered_refpos, centered_pos, fit_centered_refpos, fit_centered_pos;
     for (int i : particles ){
         refpos.push_back(referencePos[i]);
         pos.push_back(atomCoordinates[i]);
-    } 
-    
+    }
+
     for (int i : fitting_particles){
         fit_refpos.push_back(referencePos[i]);
         fit_pos.push_back(atomCoordinates[i]);
@@ -171,8 +171,8 @@ double ReferenceCalcPolaranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
     // center reference pos
     centered_refpos = shiftbyCOG(refpos);
     fit_centered_refpos = shiftbyCOG(fit_refpos);
-    
-    // center current posittions 
+
+    // center current posittions
     Vec3 fit_cog = calculateCOG(fit_pos);
     centered_pos = translateCoordinates(pos, fit_cog);
     fit_centered_pos = translateCoordinates(fit_pos, fit_cog);
@@ -192,12 +192,12 @@ double ReferenceCalcPolaranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
     Vec3 distance = getDeltaR(fit_rot_pos_cog, rot_pos_cog);
     double norm = modulo(distance);
     Vec3 unit_vec = distance / norm;
-    
-    // calcualte derivatives 
+
+    // calcualte derivatives
     double energy;
     Vec3 deriv_const;
     calculateDeriv(unit_vec, angle, deriv_const, energy);
-    
+
     std::vector <Vec3> deriv_matrix = {Vec3(1.0, 0.0, 0.0) - unit_vec[0] * unit_vec,
                                        Vec3(0.0, 1.0, 0.0) - unit_vec[1] * unit_vec,
                                        Vec3(0.0, 0.0, 1.0) - unit_vec[2] * unit_vec};
@@ -205,11 +205,11 @@ double ReferenceCalcPolaranglesForceKernel::calculateIxn(vector<OpenMM::Vec3>& a
     for (int i = 0; i < numParticles; i++) {
         for (int p = 0; p < 3; p++ ) {
             Vec3 deriv = fit_qrot.quaternionRotate(fit_qrot.quaternionInvert(fit_qrot.q), deriv_matrix[p]);
-            forces[particles[i]] -= deriv * deriv_const[p]/numParticles;   
-            
-        } 
+            forces[particles[i]] -= deriv * deriv_const[p]/numParticles;
+
+        }
     }
-      
+
     return energy;
 }
 

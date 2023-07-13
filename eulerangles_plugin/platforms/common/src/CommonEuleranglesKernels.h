@@ -113,7 +113,7 @@ private:
     double sumNormRef;
     OpenMM::ComputeArray referencePos, particles, buffer, fit_referencePos, fit_particles, fit_buffer, fit_poscenter;
     OpenMM::ComputeArray eigval, eigvec, poscenter, qrot, qrot_deriv, anglederiv, forces;
-    OpenMM::ComputeKernel kernel1, kernel2, kernel3, kernel4;
+    OpenMM::ComputeKernel kernel1, kernel2, kernel3, kernel4, kernelCOG;
     CommonEuleranglesForceInfo* info;
     std::string angle;
     bool enable_fitting=false, enable_cpu=false;
